@@ -16,7 +16,7 @@ using namespace cv;
 const int width = 600, height = 600;
 float sdfScale;
 float sdfCellSize = 1.f;
-Mat canvas, oriCanvas, output;
+Mat canvas, oriCanvas;
 Mat sdf;
 
 using Polygon = std::vector<Point>;
@@ -185,9 +185,8 @@ int main(int argc, char const *argv[]) {
 
   canvas = Mat(height, width, CV_32FC3, Scalar(1.f, 1.f, 1.f));
   oriCanvas = Mat(height, width, CV_32FC3, Scalar(1.f, 1.f, 1.f));
-  output = Mat(height, width, CV_8UC3, Scalar(255, 255, 255));
   namedWindow(wndName);
-  // setMouseCallback(wndName, mouseCallback);
+  setMouseCallback(wndName, mouseCallback);
 
   // compute sdf
   for (int x = 0; x < width; x++) {
@@ -202,6 +201,18 @@ int main(int argc, char const *argv[]) {
         temp *= nearest_distance(p, polygons[i]);
         dist = glm::min(temp, dist);
       }
+
+      // float temp = (inside_polygon(p, object1)) ? -1.f : 1.f;
+      // temp *= nearest_distance(p, object1);
+      // dist = glm::min(temp, dist);
+      //
+      // temp = (inside_polygon(p, object2)) ? -1.f : 1.f;
+      // temp *= nearest_distance(p, object2);
+      // dist = glm::min(temp, dist);
+      //
+      // temp = (inside_polygon(p, object3)) ? -1.f : 1.f;
+      // temp *= nearest_distance(p, object3);
+      // dist = glm::min(temp, dist);
 
       // sdf not as image
       sdf.at<float>(Point(x, y)) = dist;
@@ -224,34 +235,24 @@ int main(int argc, char const *argv[]) {
     polylines(oriCanvas, polygons[i], true, BLUE);
   }
 
-  int frame = 0;
-  vec2 pos(0.5f * width, 0.9f * height);
-  vec2 v(0.f, 0.f);   //(m/s)
-  float dt = 0.1f;    // s
-  float m = 10.f;     // kg
-  vec2 g(0.f, -9.8f); //(m/s^2)
+  // polylines(canvas, object1, true, BLUE);
+  // polylines(canvas, object2, true, BLUE);
+  // polylines(canvas, object3, true, BLUE);
+  //
+  // polylines(oriCanvas, object1, true, BLUE);
+  // polylines(oriCanvas, object2, true, BLUE);
+  // polylines(oriCanvas, object3, true, BLUE);
 
-  while (frame < 120) {
-    oriCanvas.copyTo(canvas); // clean canvas
+  // printSdf(vec2(250, 400));
+  // printSdf(vec2(251, 400));
+  // printSdf(vec2(249, 400));
+  // printSdf(vec2(250, 401));
+  // printSdf(vec2(250, 399));
+  // drawSdf(vec2(250, 400));
 
-    circle(canvas, Point(pos.x, pos.y), 5, RED, -1);
-
-    Mat temp;
-    canvas.convertTo(temp, CV_8UC3, 255.f);
-    flip(temp, temp, 0);
-    imwrite(format("./result/sim%03d.png", frame), temp);
-
-    v += g * dt;
-    pos += v * dt;
-
-    frame++;
-  }
-
-  // convert images to video
-  string command =
-      "ffmpeg -r 60 -start_number 0 -i ./result/sim%03d.png -vcodec mpeg4 "
-      "-b 5000k -s 600x600 ./result.mp4";
-  system(command.c_str());
+  // show image
+  imshow(wndName, canvas);
+  waitKey(0);
 
   return 0;
 }
