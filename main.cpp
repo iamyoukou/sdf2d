@@ -14,6 +14,8 @@ using namespace std;
 using namespace cv;
 
 const int width = 600, height = 600;
+const float NARROW_BAND = 5.f;
+const int BD_OFFSET = 1;
 float sdfScale;
 float sdfCellSize = 1.f;
 Mat canvas, oriCanvas, output;
@@ -82,7 +84,15 @@ float nearest_distance(const Point &temp_p, const Polygon &poly) {
 
 string wndName = "Test";
 
-float getDistance(vec2 p) { return sdf.at<float>(Point(p.x, p.y)); }
+float getDistance(vec2 p) {
+  if (p.x < 0.f || p.x > (float)width) {
+    return 9999.f;
+  } else if (p.y < 0.f || p.y > (float)height) {
+    return 9999.f;
+  } else {
+    return sdf.at<float>(Point(p.x, p.y));
+  }
+}
 
 vec2 getGradient(vec2 p) {
   vec2 gd;
@@ -156,6 +166,20 @@ void drawSdf(vec2 p) {
   arrowedLine(canvas, Point(sx, sy), Point(ex, ey), RED);
 }
 
+void drawArrow(vec2 p) {
+  vec2 grad = getGradient(p);
+  float dist = getDistance(p);
+
+  float sx, sy, ex, ey;
+  sx = p.x;
+  sy = p.y;
+  ex = sx + grad.x * dist;
+  ey = sy + grad.y * dist;
+
+  // draw arrow
+  arrowedLine(canvas, Point(sx, sy), Point(ex, ey), RED);
+}
+
 int main(int argc, char const *argv[]) {
   sdf = Mat::zeros(height, width, CV_32F);
   std::vector<Polygon> polygons;
@@ -225,22 +249,69 @@ int main(int argc, char const *argv[]) {
   }
 
   int frame = 0;
-  vec2 pos(0.5f * width, 0.9f * height);
+  vec2 pos(0.75f * width, 0.9f * height);
   vec2 v(0.f, 0.f);   //(m/s)
   float dt = 0.1f;    // s
   float m = 10.f;     // kg
   vec2 g(0.f, -9.8f); //(m/s^2)
 
-  while (frame < 120) {
+  while (frame < 600) {
     oriCanvas.copyTo(canvas); // clean canvas
 
+    // draw objects
     circle(canvas, Point(pos.x, pos.y), 5, RED, -1);
 
+    // distance
+    float dist = getDistance(pos);
+    vec2 n;
+    bool isCollisionOn = false;
+
+    // 基于 sdf 的碰撞检测
+    // 和边界处的碰撞检测
+    // 唯一不同的是法向量 n 的计算方式
+    // 而碰撞后的速度，采用同样的处理
+    // sdf collision detection
+    // narrow band threshold
+    if (dist < NARROW_BAND) {
+      n = -getGradient(pos);
+      isCollisionOn = true;
+    }
+
+    // boundary situation
+    if (pos.x < 0.f) {
+      pos.x = 0.f;
+      n = vec2(1.f, 0.f);
+      isCollisionOn = true;
+    } else if (pos.x > (float)width - 1.f) {
+      pos.x = (float)width - 1.f;
+      n = vec2(-1.f, 0.f);
+      isCollisionOn = true;
+    } else if (pos.y < 0.f) {
+      pos.y = 0.f;
+      n = vec2(0, 1.f);
+      isCollisionOn = true;
+    } else if (pos.y > (float)height - 1.f) {
+      pos.y = (float)height - 1.f;
+      n = vec2(0, -1.f);
+      isCollisionOn = true;
+    }
+
+    float vnLength = dot(n, v);
+
+    // if not separating
+    if (vnLength < 0.f && isCollisionOn) {
+      vec2 vt = v - vnLength * n;
+      float mu = 0.75f;
+      v = vt - mu * vnLength * n;
+    }
+
+    // output to image series
     Mat temp;
     canvas.convertTo(temp, CV_8UC3, 255.f);
     flip(temp, temp, 0);
     imwrite(format("./result/sim%03d.png", frame), temp);
 
+    // simulation
     v += g * dt;
     pos += v * dt;
 
