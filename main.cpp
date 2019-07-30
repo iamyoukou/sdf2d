@@ -115,14 +115,14 @@ vec2 getGradient(vec2 p) {
       getDistance(vec2(p.x + 1.f, p.y)) - getDistance(vec2(p.x - 1.f, p.y));
   float temp2 = getDistance(vec2(p.x + 1.f, p.y + 1.f)) -
                 getDistance(vec2(p.x - 1.f, p.y + 1.f));
-  gd.x = (1.f - fy) * temp1 + fy * temp2;
+  gd.x = lerp(temp1, temp2, fy);
 
-  temp1 = getDistance(vec2(p.x, p.y + 1.f)) - getDistance(vec2(p.x, p.y - 1.f));
-  temp2 = getDistance(vec2(p.x + 1.f, p.y + 1.f)) -
-          getDistance(vec2(p.x + 1.f, p.y - 1.f));
-  gd.y = (1.f - fx) * temp1 + fx * temp2;
+  float temp3 =
+      getDistance(vec2(p.x, p.y + 1.f)) - getDistance(vec2(p.x, p.y - 1.f));
+  float temp4 = getDistance(vec2(p.x + 1.f, p.y + 1.f)) -
+                getDistance(vec2(p.x + 1.f, p.y - 1.f));
+  gd.y = lerp(temp3, temp4, fx);
 
-  // sdf.at<float>(Point(x, y + 1)) - sdf.at<float>(Point(x, y - 1));
   gd = normalize(-gd);
 
   return gd;
