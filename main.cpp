@@ -13,13 +13,20 @@ using namespace glm;
 using namespace std;
 using namespace cv;
 
+struct Particle {
+  vec2 pos;
+  float m;
+  vec2 v;
+};
+
 const int width = 600, height = 600;
 const float NARROW_BAND = 5.f;
 const int BD_OFFSET = 1;
 float sdfScale;
 float sdfCellSize = 1.f;
 Mat canvas, oriCanvas, output;
-Mat sdf;
+Mat sdf, letterImg;
+vector<Particle> particles;
 
 using Polygon = std::vector<Point>;
 
@@ -180,26 +187,67 @@ void drawArrow(vec2 p) {
   arrowedLine(canvas, Point(sx, sy), Point(ex, ey), RED);
 }
 
+int myRand(int down, int up) { return (rand() % (up - down - 1) + down); }
+
+void createParticles() {
+  int rndSize = 100;
+  for (int i = 0; i < rndSize; i++) {
+    for (int j = 0; j < rndSize; j++) {
+      int x, y;
+      x = myRand(0, width - 1);
+      y = myRand(0, height - 1);
+
+      Vec3b pixelSrc = letterImg.at<Vec3b>(Point(x, y));
+
+      int color = pixelSrc[0] + pixelSrc[1] + pixelSrc[2];
+      // some threshold
+      if (color < 10) {
+        Particle p;
+
+        // rescale
+        float fx, fy;
+        fx = (float)x / (float)width; // to [0, 1.0]
+        fy = (float)y / (float)height;
+        fx *= 0.5f;
+        fy *= 0.5f;
+
+        // translate
+        fx += 0.25f;
+        fy += 0.5f;
+
+        p.pos = vec2(fx * (float)width, fy * (float)height);
+        p.m = (float)myRand(1, 10);
+        p.v = vec2(0.f, 0.f);
+
+        particles.push_back(p);
+      }
+    }
+  }
+}
+
 int main(int argc, char const *argv[]) {
+  letterImg = imread("letter.png");
+  createParticles();
+
   sdf = Mat::zeros(height, width, CV_32F);
   std::vector<Polygon> polygons;
 
   Polygon object1;
-  object1.push_back(Point(293, 174));
-  object1.push_back(Point(208, 248));
-  object1.push_back(Point(301, 318));
-  object1.push_back(Point(401, 262));
+  object1.push_back(Point(293, 24));
+  object1.push_back(Point(208, 98));
+  object1.push_back(Point(301, 168));
+  object1.push_back(Point(401, 112));
 
   Polygon object2;
-  object2.push_back(Point(59, 325));
-  object2.push_back(Point(59, 423));
-  object2.push_back(Point(169, 500));
-  object2.push_back(Point(265, 444));
+  object2.push_back(Point(59, 175));
+  object2.push_back(Point(59, 273));
+  object2.push_back(Point(169, 350));
+  object2.push_back(Point(265, 294));
 
   Polygon object3;
-  object3.push_back(Point(415, 386));
-  object3.push_back(Point(466, 522));
-  object3.push_back(Point(569, 428));
+  object3.push_back(Point(415, 236));
+  object3.push_back(Point(466, 372));
+  object3.push_back(Point(569, 278));
 
   polygons.push_back(object1);
   polygons.push_back(object2);
@@ -249,71 +297,87 @@ int main(int argc, char const *argv[]) {
   }
 
   int frame = 0;
-  vec2 pos(0.75f * width, 0.9f * height);
-  vec2 v(0.f, 0.f);   //(m/s)
+
   float dt = 0.1f;    // s
-  float m = 10.f;     // kg
   vec2 g(0.f, -9.8f); //(m/s^2)
 
   while (frame < 600) {
     oriCanvas.copyTo(canvas); // clean canvas
 
-    // draw objects
-    circle(canvas, Point(pos.x, pos.y), 5, RED, -1);
+    // for each particle
+    for (int i = 0; i < particles.size(); i++) {
+      vec2 pos = particles[i].pos;
+      vec2 v = particles[i].v;
+      float m = particles[i].m;
 
-    // distance
-    float dist = getDistance(pos);
-    vec2 n;
-    bool isCollisionOn = false;
+      // draw objects
+      circle(canvas, Point(pos.x, pos.y), 2, RED, -1);
 
-    // 基于 sdf 的碰撞检测
-    // 和边界处的碰撞检测
-    // 唯一不同的是法向量 n 的计算方式
-    // 而碰撞后的速度，采用同样的处理
-    // sdf collision detection
-    // narrow band threshold
-    if (dist < NARROW_BAND) {
-      n = -getGradient(pos);
-      isCollisionOn = true;
-    }
+      // simulation
+      v += g * dt;
+      // pos += v * dt;
 
-    // boundary situation
-    if (pos.x < 0.f) {
-      pos.x = 0.f;
-      n = vec2(1.f, 0.f);
-      isCollisionOn = true;
-    } else if (pos.x > (float)width - 1.f) {
-      pos.x = (float)width - 1.f;
-      n = vec2(-1.f, 0.f);
-      isCollisionOn = true;
-    } else if (pos.y < 0.f) {
-      pos.y = 0.f;
-      n = vec2(0, 1.f);
-      isCollisionOn = true;
-    } else if (pos.y > (float)height - 1.f) {
-      pos.y = (float)height - 1.f;
-      n = vec2(0, -1.f);
-      isCollisionOn = true;
-    }
+      // distance
+      float dist = getDistance(pos);
+      vec2 n;
+      bool isCollisionOn = false;
 
-    float vnLength = dot(n, v);
+      // 基于 sdf 的碰撞检测
+      // 和边界处的碰撞检测
+      // 唯一不同的是法向量 n 的计算方式
+      // 而碰撞后的速度，采用同样的处理
+      // for sdf collision detection
+      // narrow band threshold
+      if (abs(dist) < NARROW_BAND) {
+        n = -getGradient(pos);
+        isCollisionOn = true;
+      }
 
-    // if not separating
-    if (vnLength < 0.f && isCollisionOn) {
-      vec2 vt = v - vnLength * n;
-      float mu = 0.75f;
-      v = vt - mu * vnLength * n;
-    }
+      // boundary situation
+      if (pos.x < 0.f) {
+        pos.x = 0.f;
+        n = vec2(1.f, 0.f);
+        isCollisionOn = true;
+      } else if (pos.x > (float)width - 1.f) {
+        pos.x = (float)width - 1.f;
+        n = vec2(-1.f, 0.f);
+        isCollisionOn = true;
+      } else if (pos.y < 0.f) {
+        pos.y = 0.f;
+        n = vec2(0, 1.f);
+        isCollisionOn = true;
+      } else if (pos.y > (float)height - 1.f) {
+        pos.y = (float)height - 1.f;
+        n = vec2(0, -1.f);
+        isCollisionOn = true;
+      }
+
+      float vnLength = dot(n, v);
+
+      // if not separating
+      if (vnLength < 0.f && isCollisionOn) {
+        vec2 vt = v - vnLength * n;
+        float mu = 0.55f;
+
+        if (length(vt) <= -mu * vnLength) {
+          v = vec2(0.f, 0.f);
+        } else {
+          v = vt + mu * vnLength * normalize(vt);
+        }
+      }
+
+      // update position
+      pos += v * dt;
+
+      particles[i].v = v;
+      particles[i].pos = pos;
+    } // end for each particle
 
     // output to image series
     Mat temp;
     canvas.convertTo(temp, CV_8UC3, 255.f);
     flip(temp, temp, 0);
     imwrite(format("./result/sim%03d.png", frame), temp);
-
-    // simulation
-    v += g * dt;
-    pos += v * dt;
 
     frame++;
   }
