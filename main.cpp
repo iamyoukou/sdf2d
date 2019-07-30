@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <glm/glm.hpp>
+#include <glm/gtx/compatibility.hpp>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc.hpp>
@@ -104,10 +105,22 @@ float getDistance(vec2 p) {
 vec2 getGradient(vec2 p) {
   vec2 gd;
 
-  gd.x = getDistance(vec2(p.x + 1.f, p.y)) - getDistance(vec2(p.x - 1.f, p.y));
+  ivec2 ip((int)p.x, (int)p.y);
 
-  // sdf.at<float>(Point(x + 1, y)) - sdf.at<float>(Point(x - 1, y));
-  gd.y = getDistance(vec2(p.x, p.y + 1.f)) - getDistance(vec2(p.x, p.y - 1.f));
+  float fx, fy;
+  fx = p.x - (float)ip.x;
+  fy = p.y - (float)ip.y;
+
+  float temp1 =
+      getDistance(vec2(p.x + 1.f, p.y)) - getDistance(vec2(p.x - 1.f, p.y));
+  float temp2 = getDistance(vec2(p.x + 1.f, p.y + 1.f)) -
+                getDistance(vec2(p.x - 1.f, p.y + 1.f));
+  gd.x = (1.f - fy) * temp1 + fy * temp2;
+
+  temp1 = getDistance(vec2(p.x, p.y + 1.f)) - getDistance(vec2(p.x, p.y - 1.f));
+  temp2 = getDistance(vec2(p.x + 1.f, p.y + 1.f)) -
+          getDistance(vec2(p.x + 1.f, p.y - 1.f));
+  gd.y = (1.f - fx) * temp1 + fx * temp2;
 
   // sdf.at<float>(Point(x, y + 1)) - sdf.at<float>(Point(x, y - 1));
   gd = normalize(-gd);
@@ -190,7 +203,7 @@ void drawArrow(vec2 p) {
 int myRand(int down, int up) { return (rand() % (up - down - 1) + down); }
 
 void createParticles() {
-  int rndSize = 100;
+  int rndSize = 200;
   for (int i = 0; i < rndSize; i++) {
     for (int j = 0; j < rndSize; j++) {
       int x, y;
@@ -208,12 +221,12 @@ void createParticles() {
         float fx, fy;
         fx = (float)x / (float)width; // to [0, 1.0]
         fy = (float)y / (float)height;
-        fx *= 0.5f;
-        fy *= 0.5f;
+        fx *= 0.75f;
+        fy *= 0.75f;
 
         // translate
-        fx += 0.25f;
-        fy += 0.5f;
+        fx += 0.125f;
+        fy += 0.45f;
 
         p.pos = vec2(fx * (float)width, fy * (float)height);
         p.m = (float)myRand(1, 10);
@@ -226,7 +239,7 @@ void createParticles() {
 }
 
 int main(int argc, char const *argv[]) {
-  letterImg = imread("letter.png");
+  letterImg = imread("letter2.png");
   createParticles();
 
   sdf = Mat::zeros(height, width, CV_32F);
@@ -322,8 +335,8 @@ int main(int argc, char const *argv[]) {
       vec2 n;
       bool isCollisionOn = false;
 
-      // 基于 sdf 的碰撞检测
-      // 和边界处的碰撞检测
+      // 基于 sdf �����撞��测
+      // 和边界处的碰撞���测
       // 唯一不同的是法向量 n 的计算方式
       // 而碰撞后的速度，采用同样的处理
       // for sdf collision detection
