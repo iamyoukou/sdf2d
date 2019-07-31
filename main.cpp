@@ -238,6 +238,27 @@ void createParticles() {
   }
 }
 
+float deg2rad(float deg) { return deg * 3.1415926f / 180.f; }
+
+void translate(Polygon &poly, int x, int y) {
+  for (int i = 0; i < poly.size(); i++) {
+    poly[i] += Point(x, y);
+  }
+}
+
+void rotate(Polygon &poly, float theta) {
+  theta = deg2rad(theta);
+
+  for (int i = 0; i < poly.size(); i++) {
+    float x, y;
+    x = (float)poly[i].x;
+    y = (float)poly[i].y;
+
+    poly[i].x = (int)(x * cos(theta) - y * sin(theta));
+    poly[i].y = (int)(x * sin(theta) + y * cos(theta));
+  }
+}
+
 int main(int argc, char const *argv[]) {
   letterImg = imread("letter2.png");
   createParticles();
@@ -262,9 +283,31 @@ int main(int argc, char const *argv[]) {
   object3.push_back(Point(466, 372));
   object3.push_back(Point(569, 278));
 
+  Polygon hand;
+  hand.push_back(Point(58, 6));
+  hand.push_back(Point(49, 11));
+  hand.push_back(Point(39, 21));
+  hand.push_back(Point(38, 50));
+  hand.push_back(Point(36, 66));
+  hand.push_back(Point(32, 75));
+  hand.push_back(Point(45, 88));
+  hand.push_back(Point(61, 68));
+  hand.push_back(Point(61, 51));
+  hand.push_back(Point(63, 39));
+  hand.push_back(Point(60, 36));
+  hand.push_back(Point(53, 41));
+  hand.push_back(Point(51, 32));
+  hand.push_back(Point(52, 27));
+  hand.push_back(Point(58, 19));
+  hand.push_back(Point(60, 9));
+
+  rotate(hand, 90.f);
+  translate(hand, 350, 350);
+
   polygons.push_back(object1);
   polygons.push_back(object2);
   polygons.push_back(object3);
+  polygons.push_back(hand);
 
   sdfScale = glm::sqrt(width * width + height * height);
 

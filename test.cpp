@@ -188,10 +188,49 @@ void drawArrow(vec2 p) {
   arrowedLine(canvas, Point(sx, sy), Point(ex, ey), RED);
 }
 
+string type2str(int type) {
+  string r;
+
+  uchar depth = type & CV_MAT_DEPTH_MASK;
+  uchar chans = 1 + (type >> CV_CN_SHIFT);
+
+  switch (depth) {
+  case CV_8U:
+    r = "8U";
+    break;
+  case CV_8S:
+    r = "8S";
+    break;
+  case CV_16U:
+    r = "16U";
+    break;
+  case CV_16S:
+    r = "16S";
+    break;
+  case CV_32S:
+    r = "32S";
+    break;
+  case CV_32F:
+    r = "32F";
+    break;
+  case CV_64F:
+    r = "64F";
+    break;
+  default:
+    r = "User";
+    break;
+  }
+
+  r += "C";
+  r += (chans + '0');
+
+  return r;
+}
+
+float deg2rad(float deg) { return deg * 3.1415926f / 180.f; }
+
 int main(int argc, char const *argv[]) {
-  float alpha = 0.1f;
-  float a = 1.f, b = 2.f;
-  std::cout << lerp(alpha, a, b) << '\n';
+  std::cout << cos(deg2rad(60.f)) << '\n';
 
   return 0;
 }
