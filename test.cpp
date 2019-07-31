@@ -14,223 +14,119 @@ using namespace glm;
 using namespace std;
 using namespace cv;
 
-struct Particle {
-  vec2 pos;
-  float m;
-  vec2 v;
+const int width = 600, height = 600;
+const Scalar iRED(0, 0, 255);
+const Scalar iGREEN(0, 255, 0);
+const Scalar iBLUE(255, 0, 0);
+const Scalar iWHITE(255, 255, 255);
+
+struct Polygon {
+  std::vector<vec2> vertices;
+  vec2 lb, rt; // aabb, left-bottom, right-top
+
+  void computeAabb() {
+    lb = vertices[0];
+    rt = vertices[1];
+
+    for (int i = 0; i < vertices.size(); i++) {
+      vec2 vtx = vertices[i];
+
+      lb.x = (lb.x < vtx.x) ? lb.x : vtx.x;
+      lb.y = (lb.y < vtx.y) ? lb.y : vtx.y;
+
+      rt.x = (rt.x > vtx.x) ? rt.x : vtx.x;
+      rt.y = (rt.y > vtx.y) ? rt.y : vtx.y;
+    }
+  }
 };
 
-const int width = 600, height = 600;
-const float NARROW_BAND = 5.f;
-const int BD_OFFSET = 1;
-float sdfScale;
-float sdfCellSize = 1.f;
-Mat canvas, oriCanvas, output;
-Mat sdf, letterImg;
-vector<Particle> particles;
-
-using Polygon = std::vector<Point>;
-
-bool intersect(const Point &p1, const Point &p2, const Point &p3,
-               const Point &p4) {
-  vec3 a(p1.x, p1.y, 0), b(p2.x, p2.y, 0), c(p3.x, p3.y, 0), d(p4.x, p4.y, 0);
-
-  float crossAcAb, crossAbAd, crossDaDc, crossDcDb;
-  crossAcAb = cross(c - a, b - a).z;
-  crossAbAd = cross(b - a, d - a).z;
-  crossDaDc = cross(a - d, c - d).z;
-  crossDcDb = cross(c - d, b - d).z;
-
-  if (crossAcAb * crossAbAd > 0 && crossDaDc * crossDcDb > 0) {
-    return true;
-  } else {
-    return false;
+void translate2d(std::vector<vec2> &vtxs, float x, float y) {
+  for (int i = 0; i < vtxs.size(); i++) {
+    vtxs[i] += vec2(x, y);
   }
 }
 
-bool inside_polygon(const Point &p, const Polygon &polygon) {
-  int count = 0;
-  static const Point q(123532, 532421123);
-  for (int i = 0; i < (int)polygon.size(); i++) {
-    count += intersect(p, q, polygon[i], polygon[(i + 1) % polygon.size()]);
-  }
+void rotate2d(std::vector<vec2> &vtxs, float theta, vec2 min, vec2 max) {
+  // degree to radian
+  theta = 3.1415926f / 180.f * theta;
 
-  return count % 2 == 1;
-}
+  vec2 center = (min + max) * 0.5f;
+  vec2 offset = center - vec2(0.f, 0.f); // offset from origin
 
-float nearest_distance(const Point &temp_p, const Polygon &poly) {
-  vec2 p(temp_p.x, temp_p.y);
+  for (int i = 0; i < vtxs.size(); i++) {
+    // translate to origin
+    float x = vtxs[i].x - offset.x;
+    float y = vtxs[i].y - offset.y;
 
-  float dist = 9999.f;
+    // rotate
+    vtxs[i].x = x * cos(theta) - y * sin(theta);
+    vtxs[i].y = x * sin(theta) + y * cos(theta);
 
-  for (int i = 0; i < poly.size(); i++) {
-    const Point &temp_a = poly[i];
-    const Point &temp_b = poly[(i + 1) % poly.size()];
-
-    //逆时针遍历多边形的每一条边
-    vec2 a(temp_a.x, temp_a.y);
-    vec2 b(temp_b.x, temp_b.y);
-
-    //当前处理的边定义为 ab
-    vec2 ab = b - a;
-    float abLength = glm::length(ab);
-    vec2 dir = normalize(ab);
-
-    //求点 p 在边 ab 上的投影点 q
-    //于是，线段 pq 的长度就是 p 点的有向距离
-    vec2 ap = p - a;
-    float frac = dot(ap, dir);
-    frac = glm::clamp(frac, 0.f, abLength);
-    vec2 q = a + frac * dir;
-    vec2 pq = q - p;
-
-    dist = glm::min(dist, length(pq));
-  }
-
-  return dist;
-}
-
-string wndName = "Test";
-
-float getDistance(vec2 p) {
-  if (p.x < 0.f || p.x > (float)width) {
-    return 9999.f;
-  } else if (p.y < 0.f || p.y > (float)height) {
-    return 9999.f;
-  } else {
-    return sdf.at<float>(Point(p.x, p.y));
+    // translate back
+    vtxs[i].x += offset.x;
+    vtxs[i].y += offset.y;
   }
 }
 
-vec2 getGradient(vec2 p) {
-  vec2 gd;
+void scale2d(std::vector<vec2> &vtxs, float factor, vec2 min, vec2 max) {
+  vec2 center = (min + max) * 0.5f;
+  vec2 offset = center - vec2(0.f, 0.f); // offset from origin
 
-  gd.x = getDistance(vec2(p.x + 1.f, p.y)) - getDistance(vec2(p.x - 1.f, p.y));
-
-  // sdf.at<float>(Point(x + 1, y)) - sdf.at<float>(Point(x - 1, y));
-  gd.y = getDistance(vec2(p.x, p.y + 1.f)) - getDistance(vec2(p.x, p.y - 1.f));
-
-  // sdf.at<float>(Point(x, y + 1)) - sdf.at<float>(Point(x, y - 1));
-  gd = normalize(-gd);
-
-  return gd;
-}
-
-void mouseCallback(int event, int x, int y, int flag, void *param) {
-  oriCanvas.copyTo(canvas);
-
-  vec2 p(x, y);
-
-  switch (event) {
-  case EVENT_MOUSEMOVE:
-    // sdf gradient at (x, y)
-    vec2 grad = getGradient(p);
-
-    // distance
-    float dist = getDistance(p);
-
-    // std::cout << "(" << x << ", " << y << ") "
-    //           << "distance = " << dist << ", "
-    //           << "gradient = " << grad.x << ", " << grad.y << ")" << '\n';
-
-    // distance and direction to object1 boundary
-    float sx, sy, ex, ey;
-    sx = (float)x;
-    sy = (float)y;
-    ex = sx + grad.x * dist;
-    ey = sy + grad.y * dist;
-
-    // draw arrow
-    arrowedLine(canvas, Point(sx, sy), Point(ex, ey), RED);
-    imshow(wndName, canvas);
-    waitKey(1);
-
-    // std::cout << "(" << sx << ", " << sy << ") to (" << ex << ", " << ey
-    // <<
-    // ")"
-    //           << '\n';
-
-    break;
+  for (int i = 0; i < vtxs.size(); i++) {
+    vtxs[i] -= offset; // translate to origin
+    vtxs[i] *= factor;
+    vtxs[i] += offset; // translate back
   }
 }
-
-void printSdf(vec2 p) {
-  vec2 gd = getGradient(p);
-  std::cout << "(" << p.x << ", " << p.y << ") "
-            << "distance = " << getDistance(p) << ", "
-            << "gradient = " << gd.x << ", " << gd.y << ")" << '\n';
-}
-
-void drawSdf(vec2 p) {
-  vec2 gd = getGradient(p);
-  float dist = getDistance(p);
-
-  float sx, sy, ex, ey;
-  sx = p.x;
-  sy = p.y;
-  ex = sx + gd.x * dist;
-  ey = sy + gd.y * dist;
-
-  arrowedLine(canvas, Point(sx, sy), Point(ex, ey), RED);
-}
-
-void drawArrow(vec2 p) {
-  vec2 grad = getGradient(p);
-  float dist = getDistance(p);
-
-  float sx, sy, ex, ey;
-  sx = p.x;
-  sy = p.y;
-  ex = sx + grad.x * dist;
-  ey = sy + grad.y * dist;
-
-  // draw arrow
-  arrowedLine(canvas, Point(sx, sy), Point(ex, ey), RED);
-}
-
-string type2str(int type) {
-  string r;
-
-  uchar depth = type & CV_MAT_DEPTH_MASK;
-  uchar chans = 1 + (type >> CV_CN_SHIFT);
-
-  switch (depth) {
-  case CV_8U:
-    r = "8U";
-    break;
-  case CV_8S:
-    r = "8S";
-    break;
-  case CV_16U:
-    r = "16U";
-    break;
-  case CV_16S:
-    r = "16S";
-    break;
-  case CV_32S:
-    r = "32S";
-    break;
-  case CV_32F:
-    r = "32F";
-    break;
-  case CV_64F:
-    r = "64F";
-    break;
-  default:
-    r = "User";
-    break;
-  }
-
-  r += "C";
-  r += (chans + '0');
-
-  return r;
-}
-
-float deg2rad(float deg) { return deg * 3.1415926f / 180.f; }
 
 int main(int argc, char const *argv[]) {
-  std::cout << cos(deg2rad(60.f)) << '\n';
+  Polygon poly1;
+  poly1.vertices.push_back(vec2(0.58, 0.06));
+  poly1.vertices.push_back(vec2(0.49, 0.11));
+  poly1.vertices.push_back(vec2(0.39, 0.21));
+  poly1.vertices.push_back(vec2(0.38, 0.5));
+  poly1.vertices.push_back(vec2(0.36, 0.66));
+  poly1.vertices.push_back(vec2(0.32, 0.75));
+  poly1.vertices.push_back(vec2(0.45, 0.88));
+  poly1.vertices.push_back(vec2(0.61, 0.68));
+  poly1.vertices.push_back(vec2(0.61, 0.51));
+  poly1.vertices.push_back(vec2(0.63, 0.39));
+  poly1.vertices.push_back(vec2(0.6, 0.36));
+  poly1.vertices.push_back(vec2(0.53, 0.41));
+  poly1.vertices.push_back(vec2(0.51, 0.32));
+  poly1.vertices.push_back(vec2(0.52, 0.27));
+  poly1.vertices.push_back(vec2(0.58, 0.19));
+  poly1.vertices.push_back(vec2(0.6, 0.09));
+
+  poly1.computeAabb();
+  rotate2d(poly1.vertices, 90.f, poly1.lb, poly1.rt);
+  scale2d(poly1.vertices, 0.5f, poly1.lb, poly1.rt);
+  poly1.computeAabb(); // aftter transformation, upate aabb
+
+  Mat canvas(width, height, CV_8UC3, iWHITE);
+  string wndName = "test";
+
+  // draw objects
+  std::vector<Point> pts;
+  for (int i = 0; i < poly1.vertices.size(); i++) {
+    vec2 vtx = poly1.vertices[i];
+    float x = vtx.x * (float)width;
+    float y = vtx.y * (float)height;
+    Point p((int)x, (int)y);
+    pts.push_back(p);
+  }
+  polylines(canvas, pts, true, iBLUE);
+
+  Point p1, p2;
+  p1.x = (int)(poly1.lb.x * (float)width);
+  p1.y = (int)(poly1.lb.y * (float)height);
+  p2.x = (int)(poly1.rt.x * (float)width);
+  p2.y = (int)(poly1.rt.y * (float)height);
+  rectangle(canvas, p1, p2, iGREEN);
+
+  flip(canvas, canvas, 0);
+  imshow(wndName, canvas);
+  waitKey(0);
 
   return 0;
 }

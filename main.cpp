@@ -31,6 +31,11 @@ vector<Particle> particles;
 
 using Polygon = std::vector<Point>;
 
+struct Polygon {
+  std::vector<vec2> vertices;
+  vec2 min, max; // aabb
+};
+
 bool intersect(const Point &p1, const Point &p2, const Point &p3,
                const Point &p4) {
   vec3 a(p1.x, p1.y, 0), b(p2.x, p2.y, 0), c(p3.x, p3.y, 0), d(p4.x, p4.y, 0);
