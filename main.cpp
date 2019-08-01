@@ -10,6 +10,7 @@
 #define iGREEN Scalar(0, 255, 0)
 #define iRED Scalar(0, 0, 255)
 #define iWHITE Scalar(255, 255, 255)
+#define iBG_COLOR Scalar(222, 187, 171)
 
 #define WND_WIDTH 600
 #define WND_HEIGHT 600
@@ -24,8 +25,9 @@ struct Particle {
   vec2 v;
 };
 
-const float NARROW_BAND = 5.f;
-const int BD_OFFSET = 1;
+// if some collision detections fail,
+// change NARROW_BAND to a higher value
+const float NARROW_BAND = 6.f;
 
 // world space size
 const float width = 1000.f;
@@ -324,45 +326,49 @@ void mouseCallback(int event, int x, int y, int flag, void *param) {
 
 int myRand(int down, int up) { return (rand() % (up - down - 1) + down); }
 
-// void createParticles() {
-//   int rndSize = 200;
-//   for (int i = 0; i < rndSize; i++) {
-//     for (int j = 0; j < rndSize; j++) {
-//       int x, y;
-//       x = myRand(0, width - 1);
-//       y = myRand(0, height - 1);
-//
-//       Vec3b pixelSrc = letterImg.at<Vec3b>(Point(x, y));
-//
-//       int color = pixelSrc[0] + pixelSrc[1] + pixelSrc[2];
-//       // some threshold
-//       if (color < 10) {
-//         Particle p;
-//
-//         // rescale
-//         float fx, fy;
-//         fx = (float)x / (float)width; // to [0, 1.0]
-//         fy = (float)y / (float)height;
-//         fx *= 0.75f;
-//         fy *= 0.75f;
-//
-//         // translate
-//         fx += 0.125f;
-//         fy += 0.45f;
-//
-//         p.pos = vec2(fx * (float)width, fy * (float)height);
-//         p.m = (float)myRand(1, 10);
-//         p.v = vec2(0.f, 0.f);
-//
-//         particles.push_back(p);
-//       }
-//     }
-//   }
-// }
+void createParticles() {
+  int rndSize = 200;
+  int imgWidth = letterImg.size().width;
+  int imgHeight = letterImg.size().height;
+
+  for (int i = 0; i < rndSize; i++) {
+    for (int j = 0; j < rndSize; j++) {
+      int x, y;
+      x = myRand(0, imgWidth - 1);
+      y = myRand(0, imgHeight - 1);
+
+      Vec3b pixelSrc = letterImg.at<Vec3b>(Point(x, y));
+
+      int color = pixelSrc[0] + pixelSrc[1] + pixelSrc[2];
+      // some threshold
+      if (color < 10) {
+        Particle p;
+
+        // rescale
+        float fx, fy;
+        fx = (float)x / (float)imgWidth; // to [0, 1.0]
+        fy = (float)y / (float)imgHeight;
+        fx *= 0.75f;
+        fy *= 0.75f;
+
+        // translate
+        fx += 0.125f;
+        fy += 0.45f;
+
+        // back to world space
+        p.pos = vec2(fx * (float)width, fy * (float)height);
+        p.m = (float)myRand(1, 10);
+        p.v = vec2(0.f, 0.f);
+
+        particles.push_back(p);
+      }
+    }
+  }
+}
 
 int main(int argc, char const *argv[]) {
-  // letterImg = imread("letter2.png");
-  // createParticles();
+  letterImg = imread("letter2.png");
+  createParticles();
 
   // save sdf as cv::Mat
   sdfWidth = int(width / sdfCellSize);
@@ -442,8 +448,8 @@ int main(int argc, char const *argv[]) {
 
   sdfScale = glm::sqrt(width * width + height * height);
 
-  canvas = Mat(WND_HEIGHT, WND_WIDTH, CV_8UC3, iWHITE);
-  oriCanvas = Mat(WND_HEIGHT, WND_WIDTH, CV_8UC3, iWHITE);
+  canvas = Mat(WND_HEIGHT, WND_WIDTH, CV_8UC3, iBG_COLOR);
+  oriCanvas = Mat(WND_HEIGHT, WND_WIDTH, CV_8UC3, iBG_COLOR);
   // output = Mat(height, width, CV_8UC3, Scalar(255, 255, 255));
   namedWindow(wndName);
   // setMouseCallback(wndName, mouseCallback);
@@ -522,8 +528,13 @@ int main(int argc, char const *argv[]) {
 
       pts.push_back(p);
     }
-    polylines(canvas, pts, true, iBLUE);
-    polylines(oriCanvas, pts, true, iBLUE);
+    // polylines(canvas, pts, true, iBLUE);
+    // polylines(oriCanvas, pts, true, iBLUE);
+
+    vector<vector<Point>> pp;
+    pp.push_back(pts);
+    fillPoly(canvas, pp, iBLUE);
+    fillPoly(oriCanvas, pp, iBLUE);
 
     // draw aabb
     // Point p1, p2;
@@ -535,99 +546,103 @@ int main(int argc, char const *argv[]) {
   }
 
   // flip(canvas, canvas, 0);
-  imshow(wndName, canvas);
-  waitKey(0);
+  // imshow(wndName, canvas);
+  // waitKey(0);
 
-  // int frame = 0;
-  //
-  // float dt = 0.1f;    // s
-  // vec2 g(0.f, -9.8f); //(m/s^2)
-  //
-  // while (frame < 600) {
-  //   oriCanvas.copyTo(canvas); // clean canvas
-  //
-  //   // for each particle
-  //   for (int i = 0; i < particles.size(); i++) {
-  //     vec2 pos = particles[i].pos;
-  //     vec2 v = particles[i].v;
-  //     float m = particles[i].m;
-  //
-  //     // draw objects
-  //     circle(canvas, Point(pos.x, pos.y), 2, RED, -1);
-  //
-  //     // simulation
-  //     v += g * dt;
-  //
-  //     // distance
-  //     float dist = getDistance(pos);
-  //     vec2 n;
-  //     bool isCollisionOn = false;
-  //
-  //     // 基于 sdf 的碰撞检测
-  //     // 和边界处的碰撞检测
-  //     // 唯一不同的是法向量 n 的计算方式
-  //     // 而碰撞后的速度，采用同样的处理
-  //     // for sdf collision detection
-  //     // narrow band threshold
-  //     if (abs(dist) < NARROW_BAND) {
-  //       n = -getGradient(pos);
-  //       isCollisionOn = true;
-  //     }
-  //
-  //     // boundary situation
-  //     if (pos.x < 0.f) {
-  //       pos.x = 0.f;
-  //       n = vec2(1.f, 0.f);
-  //       isCollisionOn = true;
-  //     } else if (pos.x > (float)width - 1.f) {
-  //       pos.x = (float)width - 1.f;
-  //       n = vec2(-1.f, 0.f);
-  //       isCollisionOn = true;
-  //     } else if (pos.y < 0.f) {
-  //       pos.y = 0.f;
-  //       n = vec2(0, 1.f);
-  //       isCollisionOn = true;
-  //     } else if (pos.y > (float)height - 1.f) {
-  //       pos.y = (float)height - 1.f;
-  //       n = vec2(0, -1.f);
-  //       isCollisionOn = true;
-  //     }
-  //
-  //     float vnLength = dot(n, v);
-  //
-  //     // if not separating
-  //     if (vnLength < 0.f && isCollisionOn) {
-  //       vec2 vt = v - vnLength * n;
-  //       float mu = 0.55f;
-  //
-  //       if (length(vt) <= -mu * vnLength) {
-  //         v = vec2(0.f, 0.f);
-  //       } else {
-  //         v = vt + mu * vnLength * normalize(vt);
-  //       }
-  //     }
-  //
-  //     // update position
-  //     pos += v * dt;
-  //
-  //     particles[i].v = v;
-  //     particles[i].pos = pos;
-  //   } // end for each particle
+  int frame = 0;
 
-  // output to image series
-  //   Mat temp;
-  //   canvas.convertTo(temp, CV_8UC3, 255.f);
-  //   flip(temp, temp, 0);
-  //   imwrite(format("./result/sim%03d.png", frame), temp);
-  //
-  //   frame++;
-  // }
+  float dt = 0.1f;    // s
+  vec2 g(0.f, -9.8f); //(m/s^2)
+
+  while (frame < 600) {
+    oriCanvas.copyTo(canvas); // clean canvas
+
+    // for each particle
+    for (int i = 0; i < particles.size(); i++) {
+      vec2 pos = particles[i].pos;
+      vec2 v = particles[i].v;
+      float m = particles[i].m;
+
+      // draw objects
+      int ix, iy;
+      ix = int(pos.x / width * float(WND_WIDTH));
+      iy = int(pos.y / height * float(WND_HEIGHT));
+
+      circle(canvas, Point(ix, iy), 2, iRED, -1);
+
+      // simulation
+      v += g * dt;
+
+      // distance
+      float dist = getDistance(pos);
+      vec2 n;
+      bool isCollisionOn = false;
+
+      // 基于 sdf 的碰撞检测
+      // 和边界处的碰撞检测
+      // 唯一不同的是法向量 n 的计算方式
+      // 而碰撞后的速度，采用同样的处理
+      // for sdf collision detection
+      // narrow band threshold
+      if (abs(dist) < NARROW_BAND) {
+        n = -getGradient(pos);
+        isCollisionOn = true;
+      }
+
+      // boundary situation
+      if (pos.x < 0.f) {
+        pos.x = 0.f;
+        n = vec2(1.f, 0.f);
+        isCollisionOn = true;
+      } else if (pos.x > (float)width - 1.f) {
+        pos.x = (float)width - 1.f;
+        n = vec2(-1.f, 0.f);
+        isCollisionOn = true;
+      } else if (pos.y < 0.f) {
+        pos.y = 0.f;
+        n = vec2(0, 1.f);
+        isCollisionOn = true;
+      } else if (pos.y > (float)height - 1.f) {
+        pos.y = (float)height - 1.f;
+        n = vec2(0, -1.f);
+        isCollisionOn = true;
+      }
+
+      float vnLength = dot(n, v);
+
+      // if not separating
+      if (vnLength < 0.f && isCollisionOn) {
+        vec2 vt = v - vnLength * n;
+        float mu = 0.55f;
+
+        if (length(vt) <= -mu * vnLength) {
+          v = vec2(0.f, 0.f);
+        } else {
+          v = vt + mu * vnLength * normalize(vt);
+        }
+      }
+
+      // update position
+      pos += v * dt;
+
+      particles[i].v = v;
+      particles[i].pos = pos;
+    } // end for each particle
+
+    // output to image series
+    Mat temp;
+    canvas.copyTo(temp);
+    flip(temp, temp, 0);
+    imwrite(format("./result/sim%03d.png", frame), temp);
+
+    frame++;
+  }
 
   // convert images to video
-  // string command =
-  //     "ffmpeg -r 60 -start_number 0 -i ./result/sim%03d.png -vcodec mpeg4 "
-  //     "-b 5000k -s 600x600 ./result.mp4";
-  // system(command.c_str());
+  string command =
+      "ffmpeg -r 60 -start_number 0 -i ./result/sim%03d.png -vcodec mpeg4 "
+      "-b 5000k -s 600x600 ./result.mp4";
+  system(command.c_str());
 
   return 0;
 }
