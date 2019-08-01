@@ -6,9 +6,13 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 
-#define BLUE Scalar(1.f, 0.f, 0.f)
-#define RED Scalar(0.f, 0.f, 1.f)
-#define WHITE Scalar(1.f, 1.f, 1.f)
+#define iBLUE Scalar(255, 0, 0)
+#define iGREEN Scalar(0, 255, 0)
+#define iRED Scalar(0, 0, 255)
+#define iWHITE Scalar(255, 255, 255)
+
+#define WND_WIDTH 600
+#define WND_HEIGHT 600
 
 using namespace glm;
 using namespace std;
@@ -20,25 +24,121 @@ struct Particle {
   vec2 v;
 };
 
-const int width = 600, height = 600;
 const float NARROW_BAND = 5.f;
 const int BD_OFFSET = 1;
-float sdfScale;
-float sdfCellSize = 1.f;
-Mat canvas, oriCanvas, output;
-Mat sdf, letterImg;
-vector<Particle> particles;
 
-using Polygon = std::vector<Point>;
+// world space size
+const float width = 1000.f;
+const float height = 1000.f;
+
+const float sdfCellSize = 2.f;
+int sdfWidth, sdfHeight;
+
+float sdfScale;
+Mat canvas, oriCanvas;
+Mat sdf, sdfImg, letterImg;
+vector<Particle> particles;
+string wndName = "Test";
+
+// same origin for world space and sdf space
+const vec2 worldOrigin(0, 0);
+const vec2 sdfOrigin(0, 0);
+
+// using Polygon = std::vector<Point>;
 
 struct Polygon {
   std::vector<vec2> vertices;
-  vec2 min, max; // aabb
+  vec2 lb, rt; // aabb, left-bottom, right-top
+
+  void computeAabb() {
+    lb = vertices[0];
+    rt = vertices[1];
+
+    for (int i = 0; i < vertices.size(); i++) {
+      vec2 vtx = vertices[i];
+
+      lb.x = (lb.x < vtx.x) ? lb.x : vtx.x;
+      lb.y = (lb.y < vtx.y) ? lb.y : vtx.y;
+
+      rt.x = (rt.x > vtx.x) ? rt.x : vtx.x;
+      rt.y = (rt.y > vtx.y) ? rt.y : vtx.y;
+    }
+  }
+
+  void add(vec2 vtx) { vertices.push_back(vtx); }
+
+  void translate(vec2 xy) {
+    for (int i = 0; i < vertices.size(); i++) {
+      vertices[i] += xy;
+    }
+
+    // update aabb
+    lb += xy;
+    rt += xy;
+  }
+
+  vec2 applyRotate(vec2 vtx, float theta, vec2 offset) {
+    float x, y;
+
+    // translate to origin
+    x = vtx.x - offset.x;
+    y = vtx.y - offset.y;
+
+    // rotate
+    vtx.x = x * cos(theta) - y * sin(theta);
+    vtx.y = x * sin(theta) + y * cos(theta);
+
+    // translate back
+    vtx.x += offset.x;
+    vtx.y += offset.y;
+
+    return vtx;
+  }
+
+  void rotate(float theta) {
+    // degree to radian
+    theta = 3.1415926f / 180.f * theta;
+
+    vec2 center = (lb + rt) * 0.5f;
+    vec2 offset = center - worldOrigin; // offset from origin
+
+    float x, y;
+
+    for (int i = 0; i < vertices.size(); i++) {
+      vertices[i] = applyRotate(vertices[i], theta, offset);
+    }
+
+    // update aabb
+    computeAabb();
+  }
+
+  vec2 applyScale(vec2 vtx, float factor, vec2 offset) {
+    vtx -= offset; // translate to origin
+    vtx *= factor;
+    vtx += offset; // translate back
+
+    return vtx;
+  }
+
+  void scale(float factor) {
+    vec2 center = (lb + rt) * 0.5f;
+    vec2 offset = center - worldOrigin; // offset from origin
+
+    for (int i = 0; i < vertices.size(); i++) {
+      vertices[i] = applyScale(vertices[i], factor, offset);
+    }
+
+    // update aabb
+    lb = applyScale(lb, factor, offset);
+    rt = applyScale(rt, factor, offset);
+  }
 };
 
-bool intersect(const Point &p1, const Point &p2, const Point &p3,
-               const Point &p4) {
-  vec3 a(p1.x, p1.y, 0), b(p2.x, p2.y, 0), c(p3.x, p3.y, 0), d(p4.x, p4.y, 0);
+Polygon object1, object2, object3;
+Polygon fan, hand;
+
+bool intersect(vec2 p1, vec2 p2, vec2 p3, vec2 p4) {
+  vec3 a(p1, 0), b(p2, 0), c(p3, 0), d(p4, 0);
 
   float crossAcAb, crossAbAd, crossDaDc, crossDcDb;
   crossAcAb = cross(c - a, b - a).z;
@@ -53,28 +153,27 @@ bool intersect(const Point &p1, const Point &p2, const Point &p3,
   }
 }
 
-bool inside_polygon(const Point &p, const Polygon &polygon) {
+bool inside_polygon(vec2 p, Polygon &poly) {
   int count = 0;
-  static const Point q(123532, 532421123);
-  for (int i = 0; i < (int)polygon.size(); i++) {
-    count += intersect(p, q, polygon[i], polygon[(i + 1) % polygon.size()]);
+  vec2 q(1234567.f, 1234567.f); // a point at the infinity
+  int len = poly.vertices.size();
+
+  for (int i = 0; i < len; i++) {
+    vec2 &start = poly.vertices[i];
+    vec2 &end = poly.vertices[(i + 1) % len];
+    count += intersect(p, q, start, end);
   }
 
   return count % 2 == 1;
 }
 
-float nearest_distance(const Point &temp_p, const Polygon &poly) {
-  vec2 p(temp_p.x, temp_p.y);
-
+float nearest_distance(vec2 p, Polygon &poly) {
   float dist = 9999.f;
+  int len = poly.vertices.size();
 
-  for (int i = 0; i < poly.size(); i++) {
-    const Point &temp_a = poly[i];
-    const Point &temp_b = poly[(i + 1) % poly.size()];
-
-    //逆时针遍历多边形的每一条边
-    vec2 a(temp_a.x, temp_a.y);
-    vec2 b(temp_b.x, temp_b.y);
+  for (int i = 0; i < len; i++) {
+    vec2 &a = poly.vertices[i];
+    vec2 &b = poly.vertices[(i + 1) % len];
 
     //当前处理的边定义为 ab
     vec2 ab = b - a;
@@ -95,26 +194,34 @@ float nearest_distance(const Point &temp_p, const Polygon &poly) {
   return dist;
 }
 
-string wndName = "Test";
-
+// p is world position
 float getDistance(vec2 p) {
-  if (p.x < 0.f || p.x > (float)width) {
+  // world position to sdf index
+  int idx_x, idx_y;
+  idx_x = int(floor(p.x / sdfCellSize));
+  idx_y = int(floor(p.y / sdfCellSize));
+
+  if (idx_x < 0 || idx_x > sdfWidth - 1) {
     return 9999.f;
-  } else if (p.y < 0.f || p.y > (float)height) {
+  } else if (idx_y < 0.f || idx_y > sdfHeight - 1) {
     return 9999.f;
   } else {
-    return sdf.at<float>(Point(p.x, p.y));
+    return sdf.at<float>(Point(idx_x, idx_y));
   }
 }
 
+// p is world position
 vec2 getGradient(vec2 p) {
   vec2 gd;
 
-  ivec2 ip((int)p.x, (int)p.y);
+  // world position to sdf position
+  vec2 sdfPos, sdfPosFloor;
+  sdfPos = p / sdfCellSize;
+  sdfPosFloor = floor(sdfPos);
 
   float fx, fy;
-  fx = p.x - (float)ip.x;
-  fy = p.y - (float)ip.y;
+  fx = sdfPos.x - sdfPosFloor.x;
+  fy = sdfPos.y - sdfPosFloor.y;
 
   float temp1 =
       getDistance(vec2(p.x + 1.f, p.y)) - getDistance(vec2(p.x - 1.f, p.y));
@@ -136,7 +243,10 @@ vec2 getGradient(vec2 p) {
 void mouseCallback(int event, int x, int y, int flag, void *param) {
   oriCanvas.copyTo(canvas);
 
-  vec2 p(x, y);
+  // window position to world position
+  vec2 p;
+  p.x = float(x) / float(WND_WIDTH) * width;
+  p.y = float(y) / float(WND_HEIGHT) * height;
 
   switch (event) {
   case EVENT_MOUSEMOVE:
@@ -147,18 +257,25 @@ void mouseCallback(int event, int x, int y, int flag, void *param) {
     float dist = getDistance(p);
 
     // std::cout << "(" << x << ", " << y << ") "
-    //           << "distance = " << dist << ", "
-    //           << "gradient = " << grad.x << ", " << grad.y << ")" << '\n';
+    //           << "distance = " << dist << '\n';
+    // << "gradient = " << grad.x << ", " << grad.y << ")" << '\n';
 
     // distance and direction to object1 boundary
     float sx, sy, ex, ey;
-    sx = (float)x;
-    sy = (float)y;
+    sx = p.x;
+    sy = p.y;
     ex = sx + grad.x * dist;
     ey = sy + grad.y * dist;
 
     // draw arrow
-    arrowedLine(canvas, Point(sx, sy), Point(ex, ey), RED);
+    // world to window
+    int isx, isy, iex, iey;
+    isx = int(sx / width * float(WND_WIDTH));
+    isy = int(sy / height * float(WND_HEIGHT));
+    iex = int(ex / width * float(WND_WIDTH));
+    iey = int(ey / height * float(WND_HEIGHT));
+    arrowedLine(canvas, Point(isx, isy), Point(iex, iey), iRED);
+    // circle(canvas, Point(isx, isy), 3, iRED, -1);
     imshow(wndName, canvas);
     waitKey(1);
 
@@ -171,283 +288,346 @@ void mouseCallback(int event, int x, int y, int flag, void *param) {
   }
 }
 
-void printSdf(vec2 p) {
-  vec2 gd = getGradient(p);
-  std::cout << "(" << p.x << ", " << p.y << ") "
-            << "distance = " << getDistance(p) << ", "
-            << "gradient = " << gd.x << ", " << gd.y << ")" << '\n';
-}
+// void printSdf(vec2 p) {
+//   vec2 gd = getGradient(p);
+//   std::cout << "(" << p.x << ", " << p.y << ") "
+//             << "distance = " << getDistance(p) << ", "
+//             << "gradient = " << gd.x << ", " << gd.y << ")" << '\n';
+// }
 
-void drawSdf(vec2 p) {
-  vec2 gd = getGradient(p);
-  float dist = getDistance(p);
+// void drawSdf(vec2 p) {
+//   vec2 gd = getGradient(p);
+//   float dist = getDistance(p);
+//
+//   float sx, sy, ex, ey;
+//   sx = p.x;
+//   sy = p.y;
+//   ex = sx + gd.x * dist;
+//   ey = sy + gd.y * dist;
+//
+//   arrowedLine(canvas, Point(sx, sy), Point(ex, ey), RED);
+// }
 
-  float sx, sy, ex, ey;
-  sx = p.x;
-  sy = p.y;
-  ex = sx + gd.x * dist;
-  ey = sy + gd.y * dist;
-
-  arrowedLine(canvas, Point(sx, sy), Point(ex, ey), RED);
-}
-
-void drawArrow(vec2 p) {
-  vec2 grad = getGradient(p);
-  float dist = getDistance(p);
-
-  float sx, sy, ex, ey;
-  sx = p.x;
-  sy = p.y;
-  ex = sx + grad.x * dist;
-  ey = sy + grad.y * dist;
-
-  // draw arrow
-  arrowedLine(canvas, Point(sx, sy), Point(ex, ey), RED);
-}
+// void drawArrow(vec2 p) {
+//   vec2 grad = getGradient(p);
+//   float dist = getDistance(p);
+//
+//   float sx, sy, ex, ey;
+//   sx = p.x;
+//   sy = p.y;
+//   ex = sx + grad.x * dist;
+//   ey = sy + grad.y * dist;
+//
+//   // draw arrow
+//   arrowedLine(canvas, Point(sx, sy), Point(ex, ey), RED);
+// }
 
 int myRand(int down, int up) { return (rand() % (up - down - 1) + down); }
 
-void createParticles() {
-  int rndSize = 200;
-  for (int i = 0; i < rndSize; i++) {
-    for (int j = 0; j < rndSize; j++) {
-      int x, y;
-      x = myRand(0, width - 1);
-      y = myRand(0, height - 1);
-
-      Vec3b pixelSrc = letterImg.at<Vec3b>(Point(x, y));
-
-      int color = pixelSrc[0] + pixelSrc[1] + pixelSrc[2];
-      // some threshold
-      if (color < 10) {
-        Particle p;
-
-        // rescale
-        float fx, fy;
-        fx = (float)x / (float)width; // to [0, 1.0]
-        fy = (float)y / (float)height;
-        fx *= 0.75f;
-        fy *= 0.75f;
-
-        // translate
-        fx += 0.125f;
-        fy += 0.45f;
-
-        p.pos = vec2(fx * (float)width, fy * (float)height);
-        p.m = (float)myRand(1, 10);
-        p.v = vec2(0.f, 0.f);
-
-        particles.push_back(p);
-      }
-    }
-  }
-}
-
-float deg2rad(float deg) { return deg * 3.1415926f / 180.f; }
-
-void translate(Polygon &poly, int x, int y) {
-  for (int i = 0; i < poly.size(); i++) {
-    poly[i] += Point(x, y);
-  }
-}
-
-void rotate(Polygon &poly, float theta) {
-  theta = deg2rad(theta);
-
-  for (int i = 0; i < poly.size(); i++) {
-    float x, y;
-    x = (float)poly[i].x;
-    y = (float)poly[i].y;
-
-    poly[i].x = (int)(x * cos(theta) - y * sin(theta));
-    poly[i].y = (int)(x * sin(theta) + y * cos(theta));
-  }
-}
+// void createParticles() {
+//   int rndSize = 200;
+//   for (int i = 0; i < rndSize; i++) {
+//     for (int j = 0; j < rndSize; j++) {
+//       int x, y;
+//       x = myRand(0, width - 1);
+//       y = myRand(0, height - 1);
+//
+//       Vec3b pixelSrc = letterImg.at<Vec3b>(Point(x, y));
+//
+//       int color = pixelSrc[0] + pixelSrc[1] + pixelSrc[2];
+//       // some threshold
+//       if (color < 10) {
+//         Particle p;
+//
+//         // rescale
+//         float fx, fy;
+//         fx = (float)x / (float)width; // to [0, 1.0]
+//         fy = (float)y / (float)height;
+//         fx *= 0.75f;
+//         fy *= 0.75f;
+//
+//         // translate
+//         fx += 0.125f;
+//         fy += 0.45f;
+//
+//         p.pos = vec2(fx * (float)width, fy * (float)height);
+//         p.m = (float)myRand(1, 10);
+//         p.v = vec2(0.f, 0.f);
+//
+//         particles.push_back(p);
+//       }
+//     }
+//   }
+// }
 
 int main(int argc, char const *argv[]) {
-  letterImg = imread("letter2.png");
-  createParticles();
+  // letterImg = imread("letter2.png");
+  // createParticles();
 
-  sdf = Mat::zeros(height, width, CV_32F);
+  // save sdf as cv::Mat
+  sdfWidth = int(width / sdfCellSize);
+  sdfHeight = int(height / sdfCellSize);
+  sdf = Mat::zeros(sdfHeight, sdfWidth, CV_32F);
+  sdfImg = Mat(sdfHeight, sdfWidth, CV_8UC3, iWHITE);
+
+  // create polygons
   std::vector<Polygon> polygons;
 
-  Polygon object1;
-  object1.push_back(Point(293, 24));
-  object1.push_back(Point(208, 98));
-  object1.push_back(Point(301, 168));
-  object1.push_back(Point(401, 112));
+  // fan
+  // fan.add(vec2(118.f, 47.f));
+  // fan.add(vec2(138.f, 243.f));
+  // fan.add(vec2(249.f, 353.f));
+  // fan.add(vec2(119.f, 487.f));
+  // fan.add(vec2(315.f, 466.f));
+  // fan.add(vec2(426.f, 357.f));
+  // fan.add(vec2(557.f, 486.f));
+  // fan.add(vec2(538.f, 291.f));
+  // fan.add(vec2(427.f, 179.f));
+  // fan.add(vec2(559.f, 47.f));
+  // fan.add(vec2(361.f, 68.f));
+  // fan.add(vec2(250.f, 177.f));
+  // fan.computeAabb();
 
-  Polygon object2;
-  object2.push_back(Point(59, 175));
-  object2.push_back(Point(59, 273));
-  object2.push_back(Point(169, 350));
-  object2.push_back(Point(265, 294));
+  // transform
+  // vec2 offset;
+  // offset.x = width * 0.5f - (fan.lb.x + fan.rt.x) * 0.5f;
+  // offset.y = height * 0.5f - (fan.lb.y + fan.rt.y) * 0.5f;
+  // fan.translate(offset);
+  // fan.scale(0.5f);
+  // fan.rotate(45.f);
 
-  Polygon object3;
-  object3.push_back(Point(415, 236));
-  object3.push_back(Point(466, 372));
-  object3.push_back(Point(569, 278));
+  object1.add(vec2(488.3f, 40.f));
+  object1.add(vec2(346.7f, 163.3f));
+  object1.add(vec2(501.7f, 280.f));
+  object1.add(vec2(668.3f, 186.7f));
+  object1.computeAabb();
 
-  Polygon hand;
-  hand.push_back(Point(58, 6));
-  hand.push_back(Point(49, 11));
-  hand.push_back(Point(39, 21));
-  hand.push_back(Point(38, 50));
-  hand.push_back(Point(36, 66));
-  hand.push_back(Point(32, 75));
-  hand.push_back(Point(45, 88));
-  hand.push_back(Point(61, 68));
-  hand.push_back(Point(61, 51));
-  hand.push_back(Point(63, 39));
-  hand.push_back(Point(60, 36));
-  hand.push_back(Point(53, 41));
-  hand.push_back(Point(51, 32));
-  hand.push_back(Point(52, 27));
-  hand.push_back(Point(58, 19));
-  hand.push_back(Point(60, 9));
+  object2.add(vec2(98.3f, 291.7f));
+  object2.add(vec2(98.3f, 455.f));
+  object2.add(vec2(281.7f, 583.3f));
+  object2.add(vec2(441.7f, 490.f));
+  object2.computeAabb();
 
-  rotate(hand, 90.f);
-  translate(hand, 350, 350);
+  object3.add(vec2(691.7f, 393.3f));
+  object3.add(vec2(776.7f, 620.f));
+  object3.add(vec2(948.3f, 463.3f));
+  object3.computeAabb();
+
+  hand.add(vec2(580.f, 60.f));
+  hand.add(vec2(490.f, 110.f));
+  hand.add(vec2(390.f, 210.f));
+  hand.add(vec2(380.f, 500.f));
+  hand.add(vec2(360.f, 660.f));
+  hand.add(vec2(320.f, 750.f));
+  hand.add(vec2(450.f, 880.f));
+  hand.add(vec2(610.f, 680.f));
+  hand.add(vec2(610.f, 510.f));
+  hand.add(vec2(630.f, 390.f));
+  hand.add(vec2(600.f, 360.f));
+  hand.add(vec2(530.f, 410.f));
+  hand.add(vec2(510.f, 320.f));
+  hand.add(vec2(520.f, 270.f));
+  hand.add(vec2(580.f, 190.f));
+  hand.add(vec2(600.f, 90.f));
+  hand.computeAabb();
+  hand.rotate(90.f);
+  hand.scale(0.25f);
+  hand.translate(vec2(0.f, 250.f));
 
   polygons.push_back(object1);
   polygons.push_back(object2);
   polygons.push_back(object3);
   polygons.push_back(hand);
+  // polygons.push_back(fan);
 
   sdfScale = glm::sqrt(width * width + height * height);
 
-  canvas = Mat(height, width, CV_32FC3, Scalar(1.f, 1.f, 1.f));
-  oriCanvas = Mat(height, width, CV_32FC3, Scalar(1.f, 1.f, 1.f));
-  output = Mat(height, width, CV_8UC3, Scalar(255, 255, 255));
+  canvas = Mat(WND_HEIGHT, WND_WIDTH, CV_8UC3, iWHITE);
+  oriCanvas = Mat(WND_HEIGHT, WND_WIDTH, CV_8UC3, iWHITE);
+  // output = Mat(height, width, CV_8UC3, Scalar(255, 255, 255));
   namedWindow(wndName);
   // setMouseCallback(wndName, mouseCallback);
 
-  // compute sdf
-  for (int x = 0; x < width; x++) {
-    for (int y = 0; y < height; y++) {
-      Point p(x, y);
+  // compute sdf for (sdfWidth * sdfHeight) world space points
+  // the interval between two adjacent points is sdfCellSize
+  for (int x = 0; x < sdfWidth; x++) {
+    for (int y = 0; y < sdfHeight; y++) {
+      // world space point
+      vec2 p = worldOrigin + vec2(sdfCellSize * x, sdfCellSize * y);
 
-      float dist = 9999.f;
+      float fDist = 9999.f;
       float temp = 0.f;
 
       for (int i = 0; i < polygons.size(); i++) {
         temp = (inside_polygon(p, polygons[i])) ? -1.f : 1.f;
         temp *= nearest_distance(p, polygons[i]);
-        dist = glm::min(temp, dist);
+        fDist = glm::min(temp, fDist);
       }
 
-      // sdf not as image
-      sdf.at<float>(Point(x, y)) = dist;
+      // save sdf to a lookup table
+      sdf.at<float>(Point(x, y)) = fDist;
+      // std::cout << "(" << x << ", " << y << ") distance = " << fDist <<
+      // '\n';
 
-      // sdf as image
-      // scale sdf
-      dist = ((dist / sdfScale) + 1.f) * 0.5f;
+      // save sdf to image
+      fDist = ((fDist / sdfScale) + 1.f) * 0.5f; // to [0.0, 1.0]
+      int iDist = (int)(fDist * 255.f);          // to [0, 255]
 
-      Vec3f &pixel = canvas.at<Vec3f>(Point(x, y));
-      pixel = Vec3f(dist, dist, dist);
-
-      Vec3f &oriPixel = oriCanvas.at<Vec3f>(Point(x, y));
-      oriPixel = Vec3f(dist, dist, dist);
+      Vec3b &pixel = sdfImg.at<Vec3b>(Point(x, y));
+      pixel = Vec3b(iDist, iDist, iDist);
     }
   }
 
+  // draw sdf
+  // due to the difference between (sdfWidth, sdfHeight) and (WND_WIDTH,
+  // WND_HEIGHT) the drawn sdf may not be continuous
+  // for (int x = 0; x < WND_WIDTH; x++) {
+  //   for (int y = 0; y < WND_HEIGHT; y++) {
+  //     // window position to world position
+  //     vec2 p;
+  //     p.x = float(x) / float(WND_WIDTH) * width;
+  //     p.y = float(y) / float(WND_HEIGHT) * height;
+  //
+  //     float fDist = getDistance(p);
+  //     // sdf as image
+  //     // scale sdf
+  //     fDist = ((fDist / sdfScale) + 1.f) * 0.5f; // to [0.0, 1.0]
+  //     int iDist = (int)(fDist * 255.f);          // to [0, 255]
+  //
+  //     // to window space
+  //     int ix = int(p.x / width * WND_WIDTH);
+  //     int iy = int(p.y / height * WND_HEIGHT);
+  //
+  //     Vec3b &pixel = canvas.at<Vec3b>(Point(ix, iy));
+  //     pixel = Vec3b(iDist, iDist, iDist);
+  //
+  //     Vec3b &oriPixel = oriCanvas.at<Vec3b>(Point(ix, iy));
+  //     oriPixel = Vec3b(iDist, iDist, iDist);
+  //   }
+  // }
+
+  // save sdf image
+  // imwrite("sdfImage.png", sdfImg);
+
   // draw objects
   for (int i = 0; i < polygons.size(); i++) {
-    polylines(canvas, polygons[i], true, BLUE);
-    polylines(oriCanvas, polygons[i], true, BLUE);
+    std::vector<Point> pts;
+    for (int j = 0; j < polygons[i].vertices.size(); j++) {
+      vec2 vtx = polygons[i].vertices[j];
+
+      Point p;
+      // world to ndc, ndc to window
+      p.x = int(vtx.x / width * WND_WIDTH);
+      p.y = int(vtx.y / height * WND_HEIGHT);
+
+      pts.push_back(p);
+    }
+    polylines(canvas, pts, true, iBLUE);
+    polylines(oriCanvas, pts, true, iBLUE);
+
+    // draw aabb
+    // Point p1, p2;
+    // p1.x = (int)(polygons[i].lb.x / width * WND_WIDTH);
+    // p1.y = (int)(polygons[i].lb.y / height * WND_HEIGHT);
+    // p2.x = (int)(polygons[i].rt.x / width * WND_WIDTH);
+    // p2.y = (int)(polygons[i].rt.y / height * WND_HEIGHT);
+    // rectangle(canvas, p1, p2, iGREEN);
   }
 
-  int frame = 0;
+  // flip(canvas, canvas, 0);
+  imshow(wndName, canvas);
+  waitKey(0);
 
-  float dt = 0.1f;    // s
-  vec2 g(0.f, -9.8f); //(m/s^2)
+  // int frame = 0;
+  //
+  // float dt = 0.1f;    // s
+  // vec2 g(0.f, -9.8f); //(m/s^2)
+  //
+  // while (frame < 600) {
+  //   oriCanvas.copyTo(canvas); // clean canvas
+  //
+  //   // for each particle
+  //   for (int i = 0; i < particles.size(); i++) {
+  //     vec2 pos = particles[i].pos;
+  //     vec2 v = particles[i].v;
+  //     float m = particles[i].m;
+  //
+  //     // draw objects
+  //     circle(canvas, Point(pos.x, pos.y), 2, RED, -1);
+  //
+  //     // simulation
+  //     v += g * dt;
+  //
+  //     // distance
+  //     float dist = getDistance(pos);
+  //     vec2 n;
+  //     bool isCollisionOn = false;
+  //
+  //     // 基于 sdf 的碰撞检测
+  //     // 和边界处的碰撞检测
+  //     // 唯一不同的是法向量 n 的计算方式
+  //     // 而碰撞后的速度，采用同样的处理
+  //     // for sdf collision detection
+  //     // narrow band threshold
+  //     if (abs(dist) < NARROW_BAND) {
+  //       n = -getGradient(pos);
+  //       isCollisionOn = true;
+  //     }
+  //
+  //     // boundary situation
+  //     if (pos.x < 0.f) {
+  //       pos.x = 0.f;
+  //       n = vec2(1.f, 0.f);
+  //       isCollisionOn = true;
+  //     } else if (pos.x > (float)width - 1.f) {
+  //       pos.x = (float)width - 1.f;
+  //       n = vec2(-1.f, 0.f);
+  //       isCollisionOn = true;
+  //     } else if (pos.y < 0.f) {
+  //       pos.y = 0.f;
+  //       n = vec2(0, 1.f);
+  //       isCollisionOn = true;
+  //     } else if (pos.y > (float)height - 1.f) {
+  //       pos.y = (float)height - 1.f;
+  //       n = vec2(0, -1.f);
+  //       isCollisionOn = true;
+  //     }
+  //
+  //     float vnLength = dot(n, v);
+  //
+  //     // if not separating
+  //     if (vnLength < 0.f && isCollisionOn) {
+  //       vec2 vt = v - vnLength * n;
+  //       float mu = 0.55f;
+  //
+  //       if (length(vt) <= -mu * vnLength) {
+  //         v = vec2(0.f, 0.f);
+  //       } else {
+  //         v = vt + mu * vnLength * normalize(vt);
+  //       }
+  //     }
+  //
+  //     // update position
+  //     pos += v * dt;
+  //
+  //     particles[i].v = v;
+  //     particles[i].pos = pos;
+  //   } // end for each particle
 
-  while (frame < 600) {
-    oriCanvas.copyTo(canvas); // clean canvas
-
-    // for each particle
-    for (int i = 0; i < particles.size(); i++) {
-      vec2 pos = particles[i].pos;
-      vec2 v = particles[i].v;
-      float m = particles[i].m;
-
-      // draw objects
-      circle(canvas, Point(pos.x, pos.y), 2, RED, -1);
-
-      // simulation
-      v += g * dt;
-      // pos += v * dt;
-
-      // distance
-      float dist = getDistance(pos);
-      vec2 n;
-      bool isCollisionOn = false;
-
-      // 基于 sdf �����撞��测
-      // 和边界处的碰撞���测
-      // 唯一不同的是法向量 n 的计算方式
-      // 而碰撞后的速度，采用同样的处理
-      // for sdf collision detection
-      // narrow band threshold
-      if (abs(dist) < NARROW_BAND) {
-        n = -getGradient(pos);
-        isCollisionOn = true;
-      }
-
-      // boundary situation
-      if (pos.x < 0.f) {
-        pos.x = 0.f;
-        n = vec2(1.f, 0.f);
-        isCollisionOn = true;
-      } else if (pos.x > (float)width - 1.f) {
-        pos.x = (float)width - 1.f;
-        n = vec2(-1.f, 0.f);
-        isCollisionOn = true;
-      } else if (pos.y < 0.f) {
-        pos.y = 0.f;
-        n = vec2(0, 1.f);
-        isCollisionOn = true;
-      } else if (pos.y > (float)height - 1.f) {
-        pos.y = (float)height - 1.f;
-        n = vec2(0, -1.f);
-        isCollisionOn = true;
-      }
-
-      float vnLength = dot(n, v);
-
-      // if not separating
-      if (vnLength < 0.f && isCollisionOn) {
-        vec2 vt = v - vnLength * n;
-        float mu = 0.55f;
-
-        if (length(vt) <= -mu * vnLength) {
-          v = vec2(0.f, 0.f);
-        } else {
-          v = vt + mu * vnLength * normalize(vt);
-        }
-      }
-
-      // update position
-      pos += v * dt;
-
-      particles[i].v = v;
-      particles[i].pos = pos;
-    } // end for each particle
-
-    // output to image series
-    Mat temp;
-    canvas.convertTo(temp, CV_8UC3, 255.f);
-    flip(temp, temp, 0);
-    imwrite(format("./result/sim%03d.png", frame), temp);
-
-    frame++;
-  }
+  // output to image series
+  //   Mat temp;
+  //   canvas.convertTo(temp, CV_8UC3, 255.f);
+  //   flip(temp, temp, 0);
+  //   imwrite(format("./result/sim%03d.png", frame), temp);
+  //
+  //   frame++;
+  // }
 
   // convert images to video
-  string command =
-      "ffmpeg -r 60 -start_number 0 -i ./result/sim%03d.png -vcodec mpeg4 "
-      "-b 5000k -s 600x600 ./result.mp4";
-  system(command.c_str());
+  // string command =
+  //     "ffmpeg -r 60 -start_number 0 -i ./result/sim%03d.png -vcodec mpeg4 "
+  //     "-b 5000k -s 600x600 ./result.mp4";
+  // system(command.c_str());
 
   return 0;
 }
