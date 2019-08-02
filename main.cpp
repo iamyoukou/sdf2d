@@ -27,7 +27,7 @@ struct Particle {
 
 // if some collision detections fail,
 // change NARROW_BAND to a higher value
-const float NARROW_BAND = 6.f;
+const float NARROW_BAND = 8.f;
 
 // world space size
 const float width = 1000.f;
@@ -138,6 +138,10 @@ struct Polygon {
 
 Polygon object1, object2, object3;
 Polygon fan, hand;
+
+// create polygons
+using Polygon_ptr = Polygon *;
+std::vector<Polygon_ptr> polygons;
 
 bool intersect(vec2 p1, vec2 p2, vec2 p3, vec2 p4) {
   vec3 a(p1, 0), b(p2, 0), c(p3, 0), d(p4, 0);
@@ -353,7 +357,7 @@ void createParticles() {
 
         // translate
         fx += 0.125f;
-        fy += 0.45f;
+        fy += 0.25f;
 
         // back to world space
         p.pos = vec2(fx * (float)width, fy * (float)height);
@@ -366,94 +370,7 @@ void createParticles() {
   }
 }
 
-int main(int argc, char const *argv[]) {
-  letterImg = imread("letter2.png");
-  createParticles();
-
-  // save sdf as cv::Mat
-  sdfWidth = int(width / sdfCellSize);
-  sdfHeight = int(height / sdfCellSize);
-  sdf = Mat::zeros(sdfHeight, sdfWidth, CV_32F);
-  sdfImg = Mat(sdfHeight, sdfWidth, CV_8UC3, iWHITE);
-
-  // create polygons
-  std::vector<Polygon> polygons;
-
-  // fan
-  // fan.add(vec2(118.f, 47.f));
-  // fan.add(vec2(138.f, 243.f));
-  // fan.add(vec2(249.f, 353.f));
-  // fan.add(vec2(119.f, 487.f));
-  // fan.add(vec2(315.f, 466.f));
-  // fan.add(vec2(426.f, 357.f));
-  // fan.add(vec2(557.f, 486.f));
-  // fan.add(vec2(538.f, 291.f));
-  // fan.add(vec2(427.f, 179.f));
-  // fan.add(vec2(559.f, 47.f));
-  // fan.add(vec2(361.f, 68.f));
-  // fan.add(vec2(250.f, 177.f));
-  // fan.computeAabb();
-
-  // transform
-  // vec2 offset;
-  // offset.x = width * 0.5f - (fan.lb.x + fan.rt.x) * 0.5f;
-  // offset.y = height * 0.5f - (fan.lb.y + fan.rt.y) * 0.5f;
-  // fan.translate(offset);
-  // fan.scale(0.5f);
-  // fan.rotate(45.f);
-
-  object1.add(vec2(488.3f, 40.f));
-  object1.add(vec2(346.7f, 163.3f));
-  object1.add(vec2(501.7f, 280.f));
-  object1.add(vec2(668.3f, 186.7f));
-  object1.computeAabb();
-
-  object2.add(vec2(98.3f, 291.7f));
-  object2.add(vec2(98.3f, 455.f));
-  object2.add(vec2(281.7f, 583.3f));
-  object2.add(vec2(441.7f, 490.f));
-  object2.computeAabb();
-
-  object3.add(vec2(691.7f, 393.3f));
-  object3.add(vec2(776.7f, 620.f));
-  object3.add(vec2(948.3f, 463.3f));
-  object3.computeAabb();
-
-  hand.add(vec2(580.f, 60.f));
-  hand.add(vec2(490.f, 110.f));
-  hand.add(vec2(390.f, 210.f));
-  hand.add(vec2(380.f, 500.f));
-  hand.add(vec2(360.f, 660.f));
-  hand.add(vec2(320.f, 750.f));
-  hand.add(vec2(450.f, 880.f));
-  hand.add(vec2(610.f, 680.f));
-  hand.add(vec2(610.f, 510.f));
-  hand.add(vec2(630.f, 390.f));
-  hand.add(vec2(600.f, 360.f));
-  hand.add(vec2(530.f, 410.f));
-  hand.add(vec2(510.f, 320.f));
-  hand.add(vec2(520.f, 270.f));
-  hand.add(vec2(580.f, 190.f));
-  hand.add(vec2(600.f, 90.f));
-  hand.computeAabb();
-  hand.rotate(90.f);
-  hand.scale(0.25f);
-  hand.translate(vec2(0.f, 250.f));
-
-  polygons.push_back(object1);
-  polygons.push_back(object2);
-  polygons.push_back(object3);
-  polygons.push_back(hand);
-  // polygons.push_back(fan);
-
-  sdfScale = glm::sqrt(width * width + height * height);
-
-  canvas = Mat(WND_HEIGHT, WND_WIDTH, CV_8UC3, iBG_COLOR);
-  oriCanvas = Mat(WND_HEIGHT, WND_WIDTH, CV_8UC3, iBG_COLOR);
-  // output = Mat(height, width, CV_8UC3, Scalar(255, 255, 255));
-  namedWindow(wndName);
-  // setMouseCallback(wndName, mouseCallback);
-
+void computeSdf() {
   // compute sdf for (sdfWidth * sdfHeight) world space points
   // the interval between two adjacent points is sdfCellSize
   for (int x = 0; x < sdfWidth; x++) {
@@ -465,8 +382,8 @@ int main(int argc, char const *argv[]) {
       float temp = 0.f;
 
       for (int i = 0; i < polygons.size(); i++) {
-        temp = (inside_polygon(p, polygons[i])) ? -1.f : 1.f;
-        temp *= nearest_distance(p, polygons[i]);
+        temp = (inside_polygon(p, (*polygons[i]))) ? -1.f : 1.f;
+        temp *= nearest_distance(p, (*polygons[i]));
         fDist = glm::min(temp, fDist);
       }
 
@@ -483,43 +400,113 @@ int main(int argc, char const *argv[]) {
       pixel = Vec3b(iDist, iDist, iDist);
     }
   }
+}
 
-  // draw sdf
+void createPolygons() {
+  // fan
+  fan.add(vec2(118.f, 47.f));
+  fan.add(vec2(138.f, 243.f));
+  fan.add(vec2(249.f, 353.f));
+  fan.add(vec2(119.f, 487.f));
+  fan.add(vec2(315.f, 466.f));
+  fan.add(vec2(426.f, 357.f));
+  fan.add(vec2(557.f, 486.f));
+  fan.add(vec2(538.f, 291.f));
+  fan.add(vec2(427.f, 179.f));
+  fan.add(vec2(559.f, 47.f));
+  fan.add(vec2(361.f, 68.f));
+  fan.add(vec2(250.f, 177.f));
+  fan.computeAabb();
+  // transform
+  vec2 offset;
+  offset.x = width * 0.5f - (fan.lb.x + fan.rt.x) * 0.5f;
+  offset.y = height * 0.25f - (fan.lb.y + fan.rt.y) * 0.5f;
+  fan.translate(offset);
+  fan.scale(0.5f);
+  fan.rotate(45.f);
+
+  // object1.add(vec2(488.3f, 40.f));
+  // object1.add(vec2(346.7f, 163.3f));
+  // object1.add(vec2(501.7f, 280.f));
+  // object1.add(vec2(668.3f, 186.7f));
+  // object1.computeAabb();
+  //
+  // object2.add(vec2(98.3f, 291.7f));
+  // object2.add(vec2(98.3f, 455.f));
+  // object2.add(vec2(281.7f, 583.3f));
+  // object2.add(vec2(441.7f, 490.f));
+  // object2.computeAabb();
+  //
+  // object3.add(vec2(691.7f, 393.3f));
+  // object3.add(vec2(776.7f, 620.f));
+  // object3.add(vec2(948.3f, 463.3f));
+  // object3.computeAabb();
+  //
+  // hand.add(vec2(580.f, 60.f));
+  // hand.add(vec2(490.f, 110.f));
+  // hand.add(vec2(390.f, 210.f));
+  // hand.add(vec2(380.f, 500.f));
+  // hand.add(vec2(360.f, 660.f));
+  // hand.add(vec2(320.f, 750.f));
+  // hand.add(vec2(450.f, 880.f));
+  // hand.add(vec2(610.f, 680.f));
+  // hand.add(vec2(610.f, 510.f));
+  // hand.add(vec2(630.f, 390.f));
+  // hand.add(vec2(600.f, 360.f));
+  // hand.add(vec2(530.f, 410.f));
+  // hand.add(vec2(510.f, 320.f));
+  // hand.add(vec2(520.f, 270.f));
+  // hand.add(vec2(580.f, 190.f));
+  // hand.add(vec2(600.f, 90.f));
+  // hand.computeAabb();
+  // hand.rotate(90.f);
+  // hand.scale(0.25f);
+  // hand.translate(vec2(0.f, 250.f));
+
+  // polygons.push_back(&object1);
+  // polygons.push_back(&object2);
+  // polygons.push_back(&object3);
+  // polygons.push_back(&hand);
+  polygons.push_back(&fan);
+}
+
+void drawSdf() {
   // due to the difference between (sdfWidth, sdfHeight) and (WND_WIDTH,
   // WND_HEIGHT) the drawn sdf may not be continuous
-  // for (int x = 0; x < WND_WIDTH; x++) {
-  //   for (int y = 0; y < WND_HEIGHT; y++) {
-  //     // window position to world position
-  //     vec2 p;
-  //     p.x = float(x) / float(WND_WIDTH) * width;
-  //     p.y = float(y) / float(WND_HEIGHT) * height;
-  //
-  //     float fDist = getDistance(p);
-  //     // sdf as image
-  //     // scale sdf
-  //     fDist = ((fDist / sdfScale) + 1.f) * 0.5f; // to [0.0, 1.0]
-  //     int iDist = (int)(fDist * 255.f);          // to [0, 255]
-  //
-  //     // to window space
-  //     int ix = int(p.x / width * WND_WIDTH);
-  //     int iy = int(p.y / height * WND_HEIGHT);
-  //
-  //     Vec3b &pixel = canvas.at<Vec3b>(Point(ix, iy));
-  //     pixel = Vec3b(iDist, iDist, iDist);
-  //
-  //     Vec3b &oriPixel = oriCanvas.at<Vec3b>(Point(ix, iy));
-  //     oriPixel = Vec3b(iDist, iDist, iDist);
-  //   }
-  // }
+  for (int x = 0; x < WND_WIDTH; x++) {
+    for (int y = 0; y < WND_HEIGHT; y++) {
+      // window position to world position
+      vec2 p;
+      p.x = float(x) / float(WND_WIDTH) * width;
+      p.y = float(y) / float(WND_HEIGHT) * height;
+
+      float fDist = getDistance(p);
+      // sdf as image
+      // scale sdf
+      fDist = ((fDist / sdfScale) + 1.f) * 0.5f; // to [0.0, 1.0]
+      int iDist = (int)(fDist * 255.f);          // to [0, 255]
+
+      // to window space
+      int ix = int(p.x / width * WND_WIDTH);
+      int iy = int(p.y / height * WND_HEIGHT);
+
+      Vec3b &pixel = canvas.at<Vec3b>(Point(ix, iy));
+      pixel = Vec3b(iDist, iDist, iDist);
+
+      Vec3b &oriPixel = oriCanvas.at<Vec3b>(Point(ix, iy));
+      oriPixel = Vec3b(iDist, iDist, iDist);
+    }
+  }
 
   // save sdf image
   // imwrite("sdfImage.png", sdfImg);
+}
 
-  // draw objects
+void drawPolygons() {
   for (int i = 0; i < polygons.size(); i++) {
     std::vector<Point> pts;
-    for (int j = 0; j < polygons[i].vertices.size(); j++) {
-      vec2 vtx = polygons[i].vertices[j];
+    for (int j = 0; j < (*polygons[i]).vertices.size(); j++) {
+      vec2 vtx = (*polygons[i]).vertices[j];
 
       Point p;
       // world to ndc, ndc to window
@@ -528,13 +515,16 @@ int main(int argc, char const *argv[]) {
 
       pts.push_back(p);
     }
+
+    // non-filled polygon
     // polylines(canvas, pts, true, iBLUE);
     // polylines(oriCanvas, pts, true, iBLUE);
 
+    // filled polygon
     vector<vector<Point>> pp;
     pp.push_back(pts);
     fillPoly(canvas, pp, iBLUE);
-    fillPoly(oriCanvas, pp, iBLUE);
+    // fillPoly(oriCanvas, pp, iBLUE);
 
     // draw aabb
     // Point p1, p2;
@@ -545,17 +535,38 @@ int main(int argc, char const *argv[]) {
     // rectangle(canvas, p1, p2, iGREEN);
   }
 
-  // flip(canvas, canvas, 0);
-  // imshow(wndName, canvas);
-  // waitKey(0);
+  imwrite("objects.png", canvas);
+}
 
+void images2video() {
+  string command =
+      "ffmpeg -r 60 -start_number 0 -i ./result/sim%03d.png -vcodec mpeg4 "
+      "-b 5000k -s 600x600 ./result.mp4";
+  system(command.c_str());
+
+  // remove images
+  // command = "rm ./result/*.png";
+  // system(command.c_str());
+}
+
+void simulation() {
+  // for simulation
   int frame = 0;
+  float dt = 0.1f;  // s
+  vec2 g(0.f, 0.f); //(m/s^2)
 
-  float dt = 0.1f;    // s
-  vec2 g(0.f, -9.8f); //(m/s^2)
-
-  while (frame < 600) {
+  while (frame < 300) {
     oriCanvas.copyTo(canvas); // clean canvas
+
+    // move polygons
+    // fan.rotate(1.f);
+    fan.translate(vec2(0.f, 10.f * dt));
+
+    // redraw polygons
+    drawPolygons();
+
+    // update sdf
+    computeSdf();
 
     // for each particle
     for (int i = 0; i < particles.size(); i++) {
@@ -568,7 +579,7 @@ int main(int argc, char const *argv[]) {
       ix = int(pos.x / width * float(WND_WIDTH));
       iy = int(pos.y / height * float(WND_HEIGHT));
 
-      circle(canvas, Point(ix, iy), 2, iRED, -1);
+      circle(canvas, Point(ix, iy), 2, iWHITE, -1);
 
       // simulation
       v += g * dt;
@@ -608,18 +619,30 @@ int main(int argc, char const *argv[]) {
         isCollisionOn = true;
       }
 
-      float vnLength = dot(n, v);
+      // object velocity
+      vec2 vco(0.f, 10.f);
+
+      // relative velocity
+      vec2 vrel = v - vco;
+
+      float vnLength = dot(n, vrel);
+      // std::cout << vnLength << ", " << isCollisionOn << '\n';
 
       // if not separating
       if (vnLength < 0.f && isCollisionOn) {
-        vec2 vt = v - vnLength * n;
+        vec2 vt = vrel - vnLength * n;
         float mu = 0.55f;
 
         if (length(vt) <= -mu * vnLength) {
-          v = vec2(0.f, 0.f);
+          vrel = vec2(0.f, 0.f);
         } else {
-          v = vt + mu * vnLength * normalize(vt);
+          vrel = vt + mu * vnLength * normalize(vt);
         }
+
+        // back to particle velocity
+        v = vrel + vco;
+
+        // std::cout << v.x << ", " << v.y << '\n';
       }
 
       // update position
@@ -637,12 +660,39 @@ int main(int argc, char const *argv[]) {
 
     frame++;
   }
+}
+
+int main(int argc, char const *argv[]) {
+  // create particles from images
+  // letterImg = imread("letter2.png");
+  letterImg = imread("letter.png");
+  createParticles();
+
+  // save sdf as cv::Mat
+  sdfWidth = int(width / sdfCellSize);
+  sdfHeight = int(height / sdfCellSize);
+  sdf = Mat::zeros(sdfHeight, sdfWidth, CV_32F);
+  sdfImg = Mat(sdfHeight, sdfWidth, CV_8UC3, iWHITE);
+  sdfScale = glm::sqrt(width * width + height * height);
+
+  createPolygons();
+
+  // create canvas
+  canvas = Mat(WND_HEIGHT, WND_WIDTH, CV_8UC3, iBG_COLOR);
+  oriCanvas = Mat(WND_HEIGHT, WND_WIDTH, CV_8UC3, iBG_COLOR);
+  // output = Mat(height, width, CV_8UC3, Scalar(255, 255, 255));
+  namedWindow(wndName);
+  // setMouseCallback(wndName, mouseCallback);
+
+  computeSdf();
+  // drawSdf();
+
+  drawPolygons();
+
+  simulation();
 
   // convert images to video
-  string command =
-      "ffmpeg -r 60 -start_number 0 -i ./result/sim%03d.png -vcodec mpeg4 "
-      "-b 5000k -s 600x600 ./result.mp4";
-  system(command.c_str());
+  images2video();
 
   return 0;
 }

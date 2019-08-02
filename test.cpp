@@ -81,54 +81,22 @@ void scale2d(std::vector<vec2> &vtxs, float factor, vec2 min, vec2 max) {
   }
 }
 
+struct Test {
+  int a;
+};
+
 int main(int argc, char const *argv[]) {
-  Polygon poly1;
-  poly1.vertices.push_back(vec2(0.58, 0.06));
-  poly1.vertices.push_back(vec2(0.49, 0.11));
-  poly1.vertices.push_back(vec2(0.39, 0.21));
-  poly1.vertices.push_back(vec2(0.38, 0.5));
-  poly1.vertices.push_back(vec2(0.36, 0.66));
-  poly1.vertices.push_back(vec2(0.32, 0.75));
-  poly1.vertices.push_back(vec2(0.45, 0.88));
-  poly1.vertices.push_back(vec2(0.61, 0.68));
-  poly1.vertices.push_back(vec2(0.61, 0.51));
-  poly1.vertices.push_back(vec2(0.63, 0.39));
-  poly1.vertices.push_back(vec2(0.6, 0.36));
-  poly1.vertices.push_back(vec2(0.53, 0.41));
-  poly1.vertices.push_back(vec2(0.51, 0.32));
-  poly1.vertices.push_back(vec2(0.52, 0.27));
-  poly1.vertices.push_back(vec2(0.58, 0.19));
-  poly1.vertices.push_back(vec2(0.6, 0.09));
+  std::vector<Test *> v;
 
-  poly1.computeAabb();
-  rotate2d(poly1.vertices, 90.f, poly1.lb, poly1.rt);
-  scale2d(poly1.vertices, 0.5f, poly1.lb, poly1.rt);
-  poly1.computeAabb(); // aftter transformation, upate aabb
+  Test t;
+  t.a = 1;
 
-  Mat canvas(width, height, CV_8UC3, iBG_COLOR);
-  string wndName = "test";
+  v.push_back(&t);
 
-  // draw objects
-  std::vector<Point> pts;
-  for (int i = 0; i < poly1.vertices.size(); i++) {
-    vec2 vtx = poly1.vertices[i];
-    float x = vtx.x * (float)width;
-    float y = vtx.y * (float)height;
-    Point p((int)x, (int)y);
-    pts.push_back(p);
-  }
-  polylines(canvas, pts, true, iBLUE);
+  t.a++;
+  // v[0].a++;
 
-  Point p1, p2;
-  p1.x = (int)(poly1.lb.x * (float)width);
-  p1.y = (int)(poly1.lb.y * (float)height);
-  p2.x = (int)(poly1.rt.x * (float)width);
-  p2.y = (int)(poly1.rt.y * (float)height);
-  rectangle(canvas, p1, p2, iGREEN);
-
-  flip(canvas, canvas, 0);
-  imshow(wndName, canvas);
-  waitKey(0);
+  std::cout << (*v[0]).a << '\n';
 
   return 0;
 }
