@@ -397,53 +397,53 @@ void computeSdf() {
 
 void createPolygons() {
   // fan
-  // fan.add(vec2(118.f, 47.f));
-  // fan.add(vec2(138.f, 243.f));
-  // fan.add(vec2(249.f, 353.f));
-  // fan.add(vec2(119.f, 487.f));
-  // fan.add(vec2(315.f, 466.f));
-  // fan.add(vec2(426.f, 357.f));
-  // fan.add(vec2(557.f, 486.f));
-  // fan.add(vec2(538.f, 291.f));
-  // fan.add(vec2(427.f, 179.f));
-  // fan.add(vec2(559.f, 47.f));
-  // fan.add(vec2(361.f, 68.f));
-  // fan.add(vec2(250.f, 177.f));
-  // fan.computeAabb();
-  // // transform
-  // vec2 offset;
-  // offset.x = width * 0.5f - (fan.lb.x + fan.rt.x) * 0.5f;
-  // offset.y = height * 0.25f - (fan.lb.y + fan.rt.y) * 0.5f;
-  // fan.translate(offset);
-  // fan.scale(0.5f);
-  // fan.rotate(45.f);
-  // // other properties
-  // fan.color = Scalar(164, 70, 152);
-  // fan.v = vec2(0, 10.f);
-  // fan.omega = 12.f;
+  fan.add(vec2(118.f, 47.f));
+  fan.add(vec2(138.f, 243.f));
+  fan.add(vec2(249.f, 353.f));
+  fan.add(vec2(119.f, 487.f));
+  fan.add(vec2(315.f, 466.f));
+  fan.add(vec2(426.f, 357.f));
+  fan.add(vec2(557.f, 486.f));
+  fan.add(vec2(538.f, 291.f));
+  fan.add(vec2(427.f, 179.f));
+  fan.add(vec2(559.f, 47.f));
+  fan.add(vec2(361.f, 68.f));
+  fan.add(vec2(250.f, 177.f));
+  fan.computeAabb();
+  // transform
+  vec2 offset;
+  offset.x = width * 0.5f - (fan.lb.x + fan.rt.x) * 0.5f;
+  offset.y = height * 0.25f - (fan.lb.y + fan.rt.y) * 0.5f;
+  fan.translate(offset);
+  fan.scale(0.5f);
+  fan.rotate(45.f);
+  // other properties
+  fan.color = Scalar(164, 70, 152);
+  fan.v = vec2(0, 10.f);
+  fan.omega = 12.f;
 
-  object1.name = "green";
-  object1.add(vec2(488.3f, 40.f));
-  object1.add(vec2(346.7f, 163.3f));
-  object1.add(vec2(501.7f, 280.f));
-  object1.add(vec2(668.3f, 186.7f));
-  object1.computeAabb();
-  object1.color = iGREEN;
-
-  object2.name = "red";
-  object2.add(vec2(98.3f, 291.7f));
-  object2.add(vec2(98.3f, 455.f));
-  object2.add(vec2(281.7f, 583.3f));
-  object2.add(vec2(441.7f, 490.f));
-  object2.computeAabb();
-  object2.color = iRED;
-
-  object3.name = "blue";
-  object3.add(vec2(691.7f, 393.3f));
-  object3.add(vec2(776.7f, 620.f));
-  object3.add(vec2(948.3f, 463.3f));
-  object3.computeAabb();
-  object3.color = iBLUE;
+  // object1.name = "green";
+  // object1.add(vec2(488.3f, 40.f));
+  // object1.add(vec2(346.7f, 163.3f));
+  // object1.add(vec2(501.7f, 280.f));
+  // object1.add(vec2(668.3f, 186.7f));
+  // object1.computeAabb();
+  // object1.color = iGREEN;
+  //
+  // object2.name = "red";
+  // object2.add(vec2(98.3f, 291.7f));
+  // object2.add(vec2(98.3f, 455.f));
+  // object2.add(vec2(281.7f, 583.3f));
+  // object2.add(vec2(441.7f, 490.f));
+  // object2.computeAabb();
+  // object2.color = iRED;
+  //
+  // object3.name = "blue";
+  // object3.add(vec2(691.7f, 393.3f));
+  // object3.add(vec2(776.7f, 620.f));
+  // object3.add(vec2(948.3f, 463.3f));
+  // object3.computeAabb();
+  // object3.color = iBLUE;
   //
   // hand.add(vec2(580.f, 60.f));
   // hand.add(vec2(490.f, 110.f));
@@ -466,11 +466,11 @@ void createPolygons() {
   // hand.scale(0.25f);
   // hand.translate(vec2(0.f, 250.f));
 
-  polygons.push_back(&object1);
-  polygons.push_back(&object2);
-  polygons.push_back(&object3);
+  // polygons.push_back(&object1);
+  // polygons.push_back(&object2);
+  // polygons.push_back(&object3);
   // polygons.push_back(&hand);
-  // polygons.push_back(&fan);
+  polygons.push_back(&fan);
 }
 
 void drawPolygons() {
@@ -496,7 +496,7 @@ void drawPolygons() {
     vector<vector<Point>> pp;
     pp.push_back(pts);
     fillPoly(canvas, pp, poly.color);
-    fillPoly(oriCanvas, pp, poly.color);
+    // fillPoly(oriCanvas, pp, poly.color);
 
     // draw aabb
     // Point p1, p2;
@@ -506,6 +506,15 @@ void drawPolygons() {
     // p2.y = (int)(polygons[i].rt.y / height * WND_HEIGHT);
     // rectangle(canvas, p1, p2, iGREEN);
   }
+}
+
+void drawArrow(vec2 s, vec2 e) {
+  int isx, isy, iex, iey;
+  isx = int(s.x / width * float(WND_WIDTH));
+  isy = int(s.y / height * float(WND_HEIGHT));
+  iex = int(e.x / width * float(WND_WIDTH));
+  iey = int(e.y / height * float(WND_HEIGHT));
+  arrowedLine(canvas, Point(isx, isy), Point(iex, iey), iRED);
 }
 
 int main(int argc, char const *argv[]) {
@@ -525,12 +534,44 @@ int main(int argc, char const *argv[]) {
   oriCanvas = Mat(WND_HEIGHT, WND_WIDTH, CV_8UC3, iBG_COLOR);
   // output = Mat(height, width, CV_8UC3, Scalar(255, 255, 255));
   namedWindow(wndName);
-  setMouseCallback(wndName, mouseCallback);
+  // setMouseCallback(wndName, mouseCallback);
 
   computeSdf();
   // drawSdf();
 
   drawPolygons();
+
+  float t = 0.f;
+  float dt = 0.1f;
+  float omega = 1.2f; //[rad/s]
+
+  while (1) {
+    oriCanvas.copyTo(canvas);
+
+    fan.rotate(omega);
+
+    vec2 vtx = fan.vertices[2];
+    vec2 center = (fan.lb + fan.rt) * 0.5f;
+    vec2 r = vtx - center;
+
+    // float theta = acos(r.x / length(r));
+    // std::cout << theta << '\n';
+
+    vec2 v;
+    v.x = -r.y / length(r);
+    v.y = r.x / length(r);
+    v *= omega * length(r);
+
+    drawPolygons();
+    drawArrow(center, center + r);
+    drawArrow(vtx, vtx + v);
+
+    flip(canvas, canvas, 0);
+    imshow(wndName, canvas);
+    waitKey(1);
+
+    t += dt;
+  }
 
   imshow(wndName, canvas);
   waitKey(0);

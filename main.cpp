@@ -464,8 +464,8 @@ void createPolygons() {
   fan.rotate(45.f);
   // other properties
   fan.color = Scalar(164, 70, 152);
-  fan.v = vec2(5.f, 10.f);
-  fan.omega = 12.f;
+  fan.v = vec2(0.f, 10.f);
+  fan.omega = 1.f;
 
   // object1.add(vec2(488.3f, 40.f));
   // object1.add(vec2(346.7f, 163.3f));
@@ -484,34 +484,34 @@ void createPolygons() {
   // object3.add(vec2(948.3f, 463.3f));
   // object3.computeAabb();
   //
-  hand.name = "Hand";
-  hand.add(vec2(580.f, 60.f));
-  hand.add(vec2(490.f, 110.f));
-  hand.add(vec2(390.f, 210.f));
-  hand.add(vec2(380.f, 500.f));
-  hand.add(vec2(360.f, 660.f));
-  hand.add(vec2(320.f, 750.f));
-  hand.add(vec2(450.f, 880.f));
-  hand.add(vec2(610.f, 680.f));
-  hand.add(vec2(610.f, 510.f));
-  hand.add(vec2(630.f, 390.f));
-  hand.add(vec2(600.f, 360.f));
-  hand.add(vec2(530.f, 410.f));
-  hand.add(vec2(510.f, 320.f));
-  hand.add(vec2(520.f, 270.f));
-  hand.add(vec2(580.f, 190.f));
-  hand.add(vec2(600.f, 90.f));
-  hand.computeAabb();
-  hand.rotate(90.f);
-  hand.scale(0.25f);
-  hand.translate(vec2(-250.f, 250.f));
-  hand.color = Scalar(81, 205, 254);
-  hand.v = vec2(20.f, 0.f);
+  // hand.name = "Hand";
+  // hand.add(vec2(580.f, 60.f));
+  // hand.add(vec2(490.f, 110.f));
+  // hand.add(vec2(390.f, 210.f));
+  // hand.add(vec2(380.f, 500.f));
+  // hand.add(vec2(360.f, 660.f));
+  // hand.add(vec2(320.f, 750.f));
+  // hand.add(vec2(450.f, 880.f));
+  // hand.add(vec2(610.f, 680.f));
+  // hand.add(vec2(610.f, 510.f));
+  // hand.add(vec2(630.f, 390.f));
+  // hand.add(vec2(600.f, 360.f));
+  // hand.add(vec2(530.f, 410.f));
+  // hand.add(vec2(510.f, 320.f));
+  // hand.add(vec2(520.f, 270.f));
+  // hand.add(vec2(580.f, 190.f));
+  // hand.add(vec2(600.f, 90.f));
+  // hand.computeAabb();
+  // hand.rotate(90.f);
+  // hand.scale(0.25f);
+  // hand.translate(vec2(-250.f, 250.f));
+  // hand.color = Scalar(81, 205, 254);
+  // hand.v = vec2(20.f, 0.f);
 
   // polygons.push_back(&object1);
   // polygons.push_back(&object2);
   // polygons.push_back(&object3);
-  polygons.push_back(&hand);
+  // polygons.push_back(&hand);
   polygons.push_back(&fan);
 }
 
@@ -611,13 +611,13 @@ void simulation() {
   float dt = 0.1f;  // s
   vec2 g(0.f, 0.f); //(m/s^2)
 
-  while (frame < 300) {
+  while (frame < 600) {
     oriCanvas.copyTo(canvas); // clean canvas
 
     // move polygons
-    // fan.rotate(1.f);
+    fan.rotate(fan.omega);
     fan.translate(fan.v * dt);
-    hand.translate(hand.v * dt);
+    // hand.translate(hand.v * dt);
 
     // redraw polygons
     drawPolygons();
@@ -647,16 +647,39 @@ void simulation() {
       Polygon *co; // collision object
       bool isCollisionOn = false;
 
+      vec2 vco(0.f, 0.f);
+
       // 基于 sdf 的碰撞检测
       // 和边界处的碰撞检测
       // 唯一不同的是法向量 n 的计算方式
-      // 而碰撞后的速度，采用同样的处理
+      // 而碰撞后的速度，采用同样��处理
       // for sdf collision detection
       // narrow band threshold
       if (abs(dist) < NARROW_BAND) {
         n = -getGradient(pos);
-        co = getPolygon(pos);
+        co = getPolygon(pos); // get collision object
         isCollisionOn = true;
+
+        // object velocity
+        // linear
+        vec2 vlin = co->v;
+
+        // rotational
+        vec2 center = (co->lb + co->rt) * 0.5f;
+        vec2 r = pos - center;
+
+        vec2 vrot;
+        vrot.x = -r.y / length(r);
+        vrot.y = r.x / length(r);
+
+        // for visualization convenience
+        float scale = 0.25f;
+
+        vrot *= co->omega * length(r) * scale;
+
+        vco = vlin + vrot;
+
+        std::cout << vrot.x << ", " << vrot.y << '\n';
       }
 
       // boundary situation
@@ -677,9 +700,6 @@ void simulation() {
         n = vec2(0, -1.f);
         isCollisionOn = true;
       }
-
-      // object velocity
-      vec2 vco = co->v;
 
       // relative velocity
       vec2 vrel = v - vco;
