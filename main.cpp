@@ -673,13 +673,11 @@ void simulation() {
         vrot.y = r.x / length(r);
 
         // for visualization convenience
-        float scale = 0.25f;
+        float scale = 0.1f;
 
         vrot *= co->omega * length(r) * scale;
 
         vco = vlin + vrot;
-
-        std::cout << vrot.x << ", " << vrot.y << '\n';
       }
 
       // boundary situation
@@ -726,6 +724,15 @@ void simulation() {
 
       // update position
       pos += v * dt;
+
+      // if a particle has moved into an object
+      // push it out
+      float newDist = getDistance(pos);
+      if (newDist < 0.f) {
+        newDist *= 2.f; // for visualization convenience
+        vec2 newGrad = getGradient(pos);
+        pos += newDist * newGrad;
+      }
 
       particles[i].v = v;
       particles[i].pos = pos;
