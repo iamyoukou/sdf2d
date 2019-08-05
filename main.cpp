@@ -387,7 +387,7 @@ void createParticles() {
 
         // translate
         fx += 0.125f;
-        fy += 0.25f;
+        fy += 0.2f;
 
         // back to world space
         p.pos = vec2(fx * (float)width, fy * (float)height);
@@ -458,7 +458,7 @@ void createPolygons() {
   // transform
   vec2 offset;
   offset.x = width * 0.5f - (fan.lb.x + fan.rt.x) * 0.5f;
-  offset.y = height * 0.25f - (fan.lb.y + fan.rt.y) * 0.5f;
+  offset.y = height * 0.16f - (fan.lb.y + fan.rt.y) * 0.5f;
   fan.translate(offset);
   fan.scale(0.5f);
   fan.rotate(45.f);
@@ -597,7 +597,7 @@ void drawParticles() {
 void images2video() {
   string command =
       "ffmpeg -r 60 -start_number 0 -i ./result/sim%03d.png -vcodec mpeg4 "
-      "-b 5000k -s 600x600 ./result.mp4";
+      "-b 20M -s 600x600 ./result.mp4";
   system(command.c_str());
 
   // remove images
@@ -611,7 +611,7 @@ void simulation() {
   float dt = 0.1f;  // s
   vec2 g(0.f, 0.f); //(m/s^2)
 
-  while (frame < 600) {
+  while (frame < 720) {
     oriCanvas.copyTo(canvas); // clean canvas
 
     // move polygons
@@ -751,7 +751,7 @@ void simulation() {
 int main(int argc, char const *argv[]) {
   // create particles from images
   // letterImg = imread("letter2.png");
-  letterImg = imread("letter.png");
+  letterImg = imread("heart.png");
   createParticles();
 
   // save sdf as cv::Mat
