@@ -387,7 +387,7 @@ void createParticles() {
 
         // translate
         fx += 0.125f;
-        fy += 0.2f;
+        fy += 0.3f;
 
         // back to world space
         p.pos = vec2(fx * (float)width, fy * (float)height);
@@ -458,13 +458,13 @@ void createPolygons() {
   // transform
   vec2 offset;
   offset.x = width * 0.5f - (fan.lb.x + fan.rt.x) * 0.5f;
-  offset.y = height * 0.16f - (fan.lb.y + fan.rt.y) * 0.5f;
+  offset.y = height * 0.2f - (fan.lb.y + fan.rt.y) * 0.5f;
   fan.translate(offset);
   fan.scale(0.5f);
   fan.rotate(45.f);
   // other properties
   fan.color = Scalar(164, 70, 152);
-  fan.v = vec2(0.f, 10.f);
+  fan.v = vec2(0.f, 0.f);
   fan.omega = 1.f;
 
   // object1.add(vec2(488.3f, 40.f));
@@ -608,10 +608,10 @@ void images2video() {
 void simulation() {
   // for simulation
   int frame = 0;
-  float dt = 0.1f;  // s
-  vec2 g(0.f, 0.f); //(m/s^2)
+  float dt = 0.1f;    // s
+  vec2 g(0.f, -9.8f); //(m/s^2)
 
-  while (frame < 720) {
+  while (frame < 600) {
     oriCanvas.copyTo(canvas); // clean canvas
 
     // move polygons
