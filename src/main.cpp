@@ -51,10 +51,11 @@ void mouseCallback(int event, int x, int y, int flag, void *param) {
 void simulation() {
   // for simulation
   int frame = 0;
+  int totalFrame = 100;
   float dt = 0.1f;    // s
   vec2 g(0.f, -9.8f); //(m/s^2)
 
-  while (frame < 10) {
+  while (frame < totalFrame) {
     oriCanvas.copyTo(canvas); // clean canvas
 
     // move polygons
@@ -196,7 +197,7 @@ void simulation() {
 int main(int argc, char const *argv[]) {
   // create particles from images
   // letterImg = imread("letter2.png");
-  letterImg = imread("heart.png");
+  letterImg = imread("./res/heart.png");
   createParticles();
 
   // save sdf as cv::Mat

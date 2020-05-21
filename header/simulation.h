@@ -334,7 +334,7 @@ int myRand(int down, int up) { return (rand() % (up - down - 1) + down); }
 void createParticles() {
   // create particles from images
   // letterImg = imread("letter2.png");
-  letterImg = imread("heart.png");
+  letterImg = imread("./res/heart.png");
   // letterImg = imread("letter.png");
 
   int rndSize = 200;
