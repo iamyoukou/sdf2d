@@ -1,4 +1,5 @@
 result/
+video/
 test
 *.o
 main
