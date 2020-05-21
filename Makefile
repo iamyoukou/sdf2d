@@ -1,11 +1,12 @@
 CXX=llvm-g++
-COMPILE=-c -std=c++11 \
--I/usr/local/Cellar/opencv/4.1.0_2/include/opencv4 \
--I/usr/local/Cellar/eigen/3.3.7/include/eigen3
-LINK=-L/usr/local/Cellar/opencv/4.1.0_2/lib -lopencv_core -lopencv_highgui -lopencv_imgcodecs \
+COMPILE=-c -std=c++17 \
+-I/usr/local/Cellar/opencv/4.3.0/include/opencv4 \
+-I/usr/local/Cellar/eigen/3.3.7/include/eigen3 \
+-I/usr/local/Cellar/glm/0.9.9.8/include
+LINK=-L/usr/local/Cellar/opencv/4.3.0/lib -lopencv_core -lopencv_highgui -lopencv_imgcodecs \
 -lopencv_imgproc
 
-all: main test
+all: main test mpm2d
 
 main: main.o
 	$(CXX) $(LINK) $^ -o $@
@@ -14,8 +15,20 @@ main: main.o
 main.o: main.cpp
 	$(CXX) $(COMPILE) $^ -o $@
 
+
 test: test.o
 	$(CXX) $(LINK) $^ -o $@
+	rm -rv *.o
 
 test.o: test.cpp
+	$(CXX) $(COMPILE) $^ -o $@
+
+dummy.o: dummy.cpp
+	$(CXX) $(COMPILE) $^ -o $@
+
+mpm2d: mpm2d.o
+	$(CXX) $(LINK) $^ -o $@
+	rm -rv *.o
+
+mpm2d.o: mpm2d.cpp
 	$(CXX) $(COMPILE) $^ -o $@

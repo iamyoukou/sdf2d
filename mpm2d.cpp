@@ -1,5 +1,9 @@
 #include "simulation.h"
 
+using namespace MPM2D;
+
+Array2D<MPM2D::Node> nodes(gridWidth, gridHeight);
+
 void mouseCallback(int event, int x, int y, int flag, void *param) {
   oriCanvas.copyTo(canvas);
 
@@ -49,12 +53,8 @@ void mouseCallback(int event, int x, int y, int flag, void *param) {
 }
 
 void simulation() {
-  // for simulation
-  int frame = 0;
-  float dt = 0.1f;    // s
-  vec2 g(0.f, -9.8f); //(m/s^2)
 
-  while (frame < 10) {
+  while (frame < 600) {
     oriCanvas.copyTo(canvas); // clean canvas
 
     // move polygons
@@ -108,14 +108,12 @@ void simulation() {
         vec2 vlin = co->v;
 
         // rotational
-        // ref:
-        // http://w3e.kanazawa-it.ac.jp/math/physics/category/mechanics/masspoint_mechanics/uniform_circular_motion/henkan-tex.cgi?target=/math/physics/category/mechanics/masspoint_mechanics/uniform_circular_motion/ucm_pos_vel_acc.html
         vec2 center = (co->lb + co->rt) * 0.5f;
         vec2 r = pos - center;
 
         vec2 vrot;
-        vrot.x = -r.y / length(r); // sin
-        vrot.y = r.x / length(r);  // cos
+        vrot.x = -r.y / length(r);
+        vrot.y = r.x / length(r);
 
         // for visualization convenience
         float scale = 0.1f;
@@ -193,44 +191,205 @@ void simulation() {
   }
 }
 
+float N(float x) {
+  x = abs(x);
+
+  if (x >= 0.f && x < 1.f) {
+    return 0.5f * x * x * x - x * x + 0.6667f;
+  } else if (x >= 1.f && x < 2.f) {
+    return -0.1667f * x * x * x + x * x - 2.f * x + 1.3333f;
+  } else {
+    return 0.f;
+  }
+}
+
+// N(x) 关于 x 的导数
+float dN(float x) {
+  float sign = x < 0.f ? -1.f : 1.f;
+  float res;
+
+  x = abs(x);
+
+  if (x < 1.f) {
+    res = 1.5f * x * x * sign - 2.f * x * sign;
+  } else if (x < 2.f) {
+    res = -0.5f * x * x * sign + 2.f * x * sign - 2.f * sign;
+  } else {
+    res = 0.f;
+  }
+
+  return res;
+}
+
+// weight function
+// pos: particle position
+// node: node index
+float wip(vec2 pos, ivec2 node) {
+  vec2 fNode(float(node.x) * h, float(node.y) * h);
+  vec2 temp = (pos - fNode) / h;
+
+  return N(temp.x) * N(temp.y);
+}
+
+// gradient of weight function
+vec2 gdwip(vec2 pos, ivec2 node) {
+  vec2 fNode(float(node.x) * h, float(node.y) * h);
+  vec2 temp = (pos - fNode) / h;
+
+  vec2 res;
+  res.x = dN(temp.x) * N(temp.y);
+  res.y = N(temp.x) * dN(temp.y);
+  res /= h;
+
+  return res;
+}
+
+// svd(A) --> VLR
+// V, R: 对称行列
+// L: 对角行列
+void svd(mat2 A, mat2 &V, mat2 &L, mat2 &R) {
+  // glm::mat to Eigen::Matrix
+  // note: difference of row-major and column-major
+  // Eigen::Matrix(row, col) = glm::mat[col][row]
+  Matrix<float, 2, 2> m;
+  m(0, 0) = A[0][0];
+  m(0, 1) = A[1][0];
+  m(1, 0) = A[0][1];
+  m(1, 1) = A[1][1];
+
+  JacobiSVD<Matrix<float, 2, 2>> jacobiSvd(m, Eigen::ComputeFullU |
+                                                  Eigen::ComputeFullV);
+  Matrix<float, 2, 2> v, r;
+  v = jacobiSvd.matrixU();
+  r = jacobiSvd.matrixV();
+
+  Matrix<float, 2, 1> l;
+  l = jacobiSvd.singularValues();
+
+  // output to V
+  V[0][0] = v(0, 0);
+  V[1][0] = v(0, 1);
+  V[0][1] = v(1, 0);
+  V[1][1] = v(1, 1);
+
+  // output to L
+  L[0][0] = l(0);
+  L[1][1] = l(1);
+
+  // output to R
+  R[0][0] = r(0, 0);
+  R[1][0] = r(0, 1);
+  R[0][1] = r(1, 0);
+  R[1][1] = r(1, 1);
+}
+
+void initNodes() {
+  for (int r = 0; r < nodes.numOfRows; r++) {
+    for (int c = 0; c < nodes.numOfCols; c++) {
+      // std::cout << nodes.get(r, c).m << '\n';
+    }
+  }
+}
+
+void rasterize() {
+  // particle to grid
+  for (int r = 0; r < nodes.numOfRows; r++) {
+    for (int c = 0; c < nodes.numOfCols; c++) {
+      for (int i = 0; i < particles.size(); i++) {
+        MPM2D::Node n = nodes.get(r, c);
+      }
+    }
+  }
+}
+
 int main(int argc, char const *argv[]) {
-  // create particles from images
-  // letterImg = imread("letter2.png");
-  letterImg = imread("heart.png");
   createParticles();
-
-  // save sdf as cv::Mat
-  sdfWidth = int(width / sdfCellSize);
-  sdfHeight = int(height / sdfCellSize);
-
-  grid.sdf = Mat::zeros(sdfHeight, sdfWidth, CV_32F);
-  grid.polyPtrs.resize(sdfHeight, sdfWidth);
-  sdfImg = Mat(sdfHeight, sdfWidth, CV_8UC3, iWHITE);
-  sdfScale = glm::sqrt(width * width + height * height);
-
-  createPolygons();
-
-  // create canvas
-  canvas = Mat(WND_HEIGHT, WND_WIDTH, CV_8UC3, iBG_COLOR);
-  oriCanvas = Mat(WND_HEIGHT, WND_WIDTH, CV_8UC3, iBG_COLOR);
-  // output = Mat(height, width, CV_8UC3, Scalar(255, 255, 255));
-  namedWindow(wndName);
-  // setMouseCallback(wndName, mouseCallback);
-
-  computeSdf();
-  // drawSdf();
-
-  drawPolygons();
-  // drawParticles();
-
-  simulation();
-
-  // convert images to video
-  images2video();
+  // createPolygons();
+  //
+  // initGrid();
+  // initWindow();
+  //
+  // computeSdf();
+  //
+  // drawPolygons();
+  //
+  // simulation();
+  //
+  // images2video();
 
   // flip(canvas, canvas, 0);
   // imshow(wndName, canvas);
   // waitKey(0);
+
+  // step 1
+  for (int r = 0; r < nodes.numOfRows; r++) {
+    for (int c = 0; c < nodes.numOfCols; c++) {
+      MPM2D::Node n;
+      n.m = 0;
+      n.v = vec2(0, 0);
+
+      for (int i = 0; i < particles.size(); i++) {
+        Particle &p = particles[i];
+
+        // wip 需要重复使用
+        // 可以考虑保存在查找表里
+        n.m += p.m * wip(p.pos, ivec2(r, c));
+        n.m = (n.m == 0) ? 0.00001f : n.m; // avoid zero-division
+      }
+
+      // node velocity
+      for (int i = 0; i < particles.size(); i++) {
+        Particle &p = particles[i];
+        n.v += p.v * p.m * wip(p.pos, ivec2(r, c));
+      }
+      n.v /= n.m;
+
+      if (frame == 0) {
+        float h3 = h * h * h;
+        n.rho = n.m / h3;
+      }
+
+      nodes.set(r, c, n);
+    }
+  } // end step 1
+
+  // step 2
+  // node density, first frame only
+  if (frame == 0) {
+    float h3 = h * h * h;
+
+    for (int i = 0; i < particles.size(); i++) {
+      Particle &p = particles[i];
+
+      for (int r = 0; r < nodes.numOfRows; r++) {
+        for (int c = 0; c < nodes.numOfCols; c++) {
+          MPM2D::Node &n = nodes.get(r, c);
+          p.rho += n.m * wip(p.pos, ivec2(r, c));
+        }
+      }
+      p.rho /= h3;
+
+      p.vol = p.m / p.rho;
+    }
+  } // end step 2
+
+  // for (int r = 0; r < nodes.numOfRows; r++) {
+  //   for (int c = 0; c < nodes.numOfCols; c++) {
+  //     // std::cout << "m_i = " << nodes.get(r, c).m << '\n';
+  //     // std::cout << "v_i = " << glm::to_string(nodes.get(r, c).v) << '\n';
+  //     // std::cout << "rho_i = " << nodes.get(r, c).rho << '\n';
+  //   }
+  // }
+
+  for (int i = 0; i < particles.size(); i++) {
+    Particle &p = particles[i];
+    std::cout << "rho_p = " << p.rho << '\n';
+    std::cout << "vol_p = " << p.vol << '\n';
+  }
+
+  // for (int i = 0; i < particles.size(); i++) {
+  //   std::cout << to_string(particles[i].pos) << '\n';
+  // }
 
   return 0;
 }
