@@ -10,4 +10,6 @@ I refine the original algorithm and reduce a lot of computing time.
 You can find the refined version in [this project](https://github.com/iamyoukou/sdf2dWithMPM2D).
 
 # Result
-![result](result.gif)
+Throwing track of a ball
+
+![result](csgo_throwing_track.gif)
