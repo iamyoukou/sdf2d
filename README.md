@@ -5,11 +5,11 @@ The accuracy is higher than that of [8ssedt](https://github.com/Lisapple/8SSEDT)
 
 Inspired by Yuanming Hu's [Taichi](https://github.com/yuanming-hu/taichi).
 
-## FWI
+## FYI
 I refine the original algorithm and reduce a lot of computing time.
 You can find the refined version in [this project](https://github.com/iamyoukou/sdf2dWithMPM2D).
 
 # Result
-Throwing track of a ball
+Throwing track (like the one in CSGO)
 
 ![result](csgo_throwing_track.gif)
