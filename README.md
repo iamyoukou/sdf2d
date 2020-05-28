@@ -26,4 +26,4 @@ But I have refined it in [another project](https://github.com/iamyoukou/sdf2dWit
 # Result
 Throwing track (like the one in CSGO)
 
-![result](./video/throwingTrack.gif)
+![result](throwingTrack.gif)
