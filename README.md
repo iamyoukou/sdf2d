@@ -5,11 +5,25 @@ The accuracy is higher than that of [8ssedt](https://github.com/Lisapple/8SSEDT)
 
 Inspired by Yuanming Hu's [Taichi](https://github.com/yuanming-hu/taichi).
 
-## FYI
-I refine the original algorithm and reduce a lot of computing time.
-You can find the refined version in [this project](https://github.com/iamyoukou/sdf2dWithMPM2D).
+# Computing gradient
+When computing the gradient for a given point,
+I use Yuanming Hu's strategy because it performs more smoothly than mine.
+
+![gradient](./res/gradient.png)
+
+The final gradient is `grad = lerp(grad1, grad2, α)` for `x` and `y` direction, respectively.
+
+It means, if the point is close to the left (or bottom) border of the current cell, i.e. `α -> 1`,
+we get more gradient of the current cell.
+Otherwise, we get more gradient of the `x + 1` (or `y + 1`) cell.
+
+# Reducing computing time
+When deal with dynamic objects in a simulating program,
+recomputing SDF is necessary.
+In this project, I used an expensive one.
+But I have refined it in [another project](https://github.com/iamyoukou/sdf2dWithMPM2D).
 
 # Result
 Throwing track (like the one in CSGO)
 
-![result](csgo_throwing_track.gif)
+![result](./video/throwingTrack.gif)
