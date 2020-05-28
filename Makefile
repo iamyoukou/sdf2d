@@ -8,7 +8,7 @@ LINK=-L/usr/local/Cellar/opencv/4.3.0/lib -lopencv_core -lopencv_highgui -lopenc
 -lopencv_imgproc
 SRC_DIR=/Users/YJ-work/cpp/sdf2d/src
 
-all: main test mpm2d
+all: main throwingTrack
 
 main: main.o
 	$(CXX) $(LINK) $^ -o $@
@@ -17,20 +17,9 @@ main: main.o
 main.o: $(SRC_DIR)/main.cpp
 	$(CXX) $(COMPILE) $^ -o $@
 
-
-test: test.o
+throwingTrack: throwingTrack.o
 	$(CXX) $(LINK) $^ -o $@
 	rm -rv *.o
 
-test.o: test.cpp
-	$(CXX) $(COMPILE) $^ -o $@
-
-dummy.o: dummy.cpp
-	$(CXX) $(COMPILE) $^ -o $@
-
-mpm2d: mpm2d.o
-	$(CXX) $(LINK) $^ -o $@
-	rm -rv *.o
-
-mpm2d.o: mpm2d.cpp
+throwingTrack.o: $(SRC_DIR)/throwingTrack.cpp
 	$(CXX) $(COMPILE) $^ -o $@
