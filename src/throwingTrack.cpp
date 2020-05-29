@@ -88,7 +88,7 @@ const float NARROW_BAND = 8.f;
 const float width = 1000.f;
 const float height = 1000.f;
 
-const float sdfCellSize = 2.f;
+const float sdfCellSize = 4.f;
 int sdfWidth, sdfHeight;
 
 float sdfScale;
@@ -296,16 +296,16 @@ vec2 getGradient(vec2 p) {
   fx = sdfPos.x - sdfPosFloor.x;
   fy = sdfPos.y - sdfPosFloor.y;
 
-  float temp1 =
-      getDistance(vec2(p.x + 1.f, p.y)) - getDistance(vec2(p.x - 1.f, p.y));
-  float temp2 = getDistance(vec2(p.x + 1.f, p.y + 1.f)) -
-                getDistance(vec2(p.x - 1.f, p.y + 1.f));
+  float temp1 = getDistance(vec2(p.x + sdfCellSize, p.y)) -
+                getDistance(vec2(p.x - sdfCellSize, p.y));
+  float temp2 = getDistance(vec2(p.x + sdfCellSize, p.y + sdfCellSize)) -
+                getDistance(vec2(p.x - sdfCellSize, p.y + sdfCellSize));
   gd.x = lerp(temp1, temp2, fy);
 
-  float temp3 =
-      getDistance(vec2(p.x, p.y + 1.f)) - getDistance(vec2(p.x, p.y - 1.f));
-  float temp4 = getDistance(vec2(p.x + 1.f, p.y + 1.f)) -
-                getDistance(vec2(p.x + 1.f, p.y - 1.f));
+  float temp3 = getDistance(vec2(p.x, p.y + sdfCellSize)) -
+                getDistance(vec2(p.x, p.y - sdfCellSize));
+  float temp4 = getDistance(vec2(p.x + sdfCellSize, p.y + sdfCellSize)) -
+                getDistance(vec2(p.x + sdfCellSize, p.y - sdfCellSize));
   gd.y = lerp(temp3, temp4, fx);
 
   gd = normalize(-gd);
