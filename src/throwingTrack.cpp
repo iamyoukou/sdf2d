@@ -652,10 +652,6 @@ void simulation() {
 
       vec2 vco(0.f, 0.f);
 
-      // 基于 sdf 的碰撞检测
-      // 和边界处的碰撞检测
-      // 唯一不同的是法向量 n 的计算方式
-      // 而碰撞后的速度，采用同样��处理
       // for sdf collision detection
       // narrow band threshold
       if (abs(dist) < NARROW_BAND) {
